@@ -1,0 +1,27 @@
+{
+  "expo": {
+    "name": "QFTX Trader",
+    "slug": "qftx-trader",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": false,
+    "splash": {
+      "resizeMode": "contain",
+      "backgroundColor": "#0b0d12"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.qftx.trader"
+    },
+    "android": {
+      "package": "com.qftx.trader",
+      "adaptiveIcon": {
+        "backgroundColor": "#0b0d12"
+      }
+    },
+    "web": {
+      "bundler": "metro"
+    }
+  }
+}
