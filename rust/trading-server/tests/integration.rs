@@ -86,26 +86,17 @@ fn cross_two_clients_emits_fills() {
     assert_eq!(resting.order_id, 1);
     assert_eq!(resting.leaves_qty, 5);
 
-    // Buyer crosses for 3 @ 100. Expect a partial-fill report + a terminal
-    // Filled report.
+    // Buyer crosses for 3 @ 100. With the terminal-merge optimisation the
+    // single fill carries the terminal Filled status itself, so we get one
+    // report instead of two.
     buf.clear();
     protocol::encode_new_order(2, &new_order(2, Side::Buy, 100, 3), &mut buf);
     buyer.write_all(&buf).unwrap();
-    let r1 = read_exec_report(&mut buyer);
-    let r2 = read_exec_report(&mut buyer);
-    let reports = [r1, r2];
-    assert!(
-        reports
-            .iter()
-            .any(|r| r.last_qty == 3 && r.last_price == 100 * PRICE_SCALE),
-        "expected a 3@100 fill report, got {reports:?}"
-    );
-    assert!(
-        reports
-            .iter()
-            .any(|r| r.status == ExecStatus::Filled as u8),
-        "expected a Filled terminal report, got {reports:?}"
-    );
+    let r = read_exec_report(&mut buyer);
+    assert_eq!(r.status, ExecStatus::Filled as u8, "got {r:?}");
+    assert_eq!(r.last_qty, 3, "got {r:?}");
+    assert_eq!(r.last_price, 100 * PRICE_SCALE, "got {r:?}");
+    assert_eq!(r.leaves_qty, 0, "got {r:?}");
 
     // Seller cancels the residual 2 — expect a Cancelled report.
     buf.clear();

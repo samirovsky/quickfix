@@ -4,7 +4,7 @@ Low-latency order-matching trading server, written in Rust.
 
 * Custom binary wire protocol (more compact and cheaper to parse than FIX).
 * Pluggable market-data layer — any provider (file replay, multicast, ITCH, websocket) can implement `MarketDataProvider` and feed the engine.
-* Single-threaded matching core; **`process_new_order` p99 < 1 ms**, enforced by `tests/latency_gate.rs`. Measured on a generic dev container at p50 ≈ 100 ns, p99 ≈ 310 ns, p99.9 ≈ 550 ns over 100k iterations against a populated book (10k resting orders, 100 levels per side).
+* Single-threaded matching core; **`process_new_order` p99 < 1 ms**, enforced by `tests/latency_gate.rs`. Measured on a generic dev container at p50 ≈ 90 ns, p99 ≈ 150 ns, p99.9 ≈ 290 ns over 100k iterations against a populated book (10k resting orders, 100 levels per side).
 * Asynchronous write-ahead log — the hot path never blocks on disk; a dedicated writer thread batches and `flush()`es records.
 
 ## Separation from the C++ QuickFIX engine
@@ -17,6 +17,7 @@ Optimisations on the hot path:
 
 * `WalRecord` is a `Copy` enum of POD bodies — the engine `try_send`s it across a `crossbeam_channel` with zero heap allocation. Serialisation to bytes happens on the WAL writer thread, off the hot path.
 * Maker-side execution reports are not emitted. This server has no client-id ↔ connection map, so they would route to `conn_id = 0` and be dropped by the dispatcher anyway. Skipping the construction + `try_send` saves one CAS per fill.
+* Terminal-status reports are merged into the last fill: a fully-filled single-fill order produces **one** `ExecReport` instead of two (one partial + one terminal). For an N-fill order, the Nth report carries the terminal status. This saves one `try_send` per order with at least one fill.
 * `process_new_order`, `OrderBook::submit`, `match_against`, `rest`, and the protocol enum conversions are all `#[inline]`-hinted so cross-crate calls (benchmark, integration test, server) inline cleanly.
 * Wire structs are laid out largest-field-first so `#[repr(C)]` produces zero internal padding — `zerocopy::AsBytes` parses/encodes via a single memcpy with no per-field work.
 * `mimalloc` is the global allocator, set in `main.rs`.

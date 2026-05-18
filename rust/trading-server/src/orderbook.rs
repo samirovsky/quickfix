@@ -16,6 +16,12 @@ use rustc_hash::FxHashMap;
 use crate::protocol::{OrdType, Side, Tif};
 use crate::{OrderId, Price, Qty, SymbolId};
 
+/// Order-id lookup index. `FxHashMap` (rustc-hash) gives a fast hash
+/// suited for u64 keys while still mixing bits — important because real
+/// client-assigned ids tend to be dense, and a pure identity hash would
+/// cluster heavily on power-of-2 tables.
+type OrderIndex = FxHashMap<OrderId, OrderLocation>;
+
 #[derive(Debug, Clone, Copy)]
 pub struct RestingOrder {
     pub order_id: OrderId,
@@ -54,7 +60,7 @@ pub struct OrderBook {
     bids: BTreeMap<Price, PriceLevel>,
     /// Asks keyed by `price` ascending — lowest key is the best ask.
     asks: BTreeMap<Price, PriceLevel>,
-    orders: FxHashMap<OrderId, OrderLocation>,
+    orders: OrderIndex,
 }
 
 impl OrderBook {

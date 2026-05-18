@@ -223,53 +223,65 @@ impl Engine {
             }
         };
 
-        // Emit one exec report per fill for the taker, then a terminal
-        // report. Maker reports are intentionally omitted: this server has
-        // no client-id ↔ conn map, so they would route to conn_id=0 and be
-        // dropped by the dispatcher. Skipping the construction + try_send
-        // saves a CAS per fill on the hot path.
+        // Emit one exec report per fill for the taker. When the order is
+        // done (filled, partial-and-done, or rejected after fills), the
+        // LAST fill carries the terminal status — saving a separate
+        // terminal `try_send`. Maker reports are intentionally omitted
+        // (no client-id ↔ conn map; they would route to conn_id=0 and be
+        // dropped by the dispatcher).
         //
         // Iterate by index — `Fill` is `Copy`, and the loop body mutates
         // `self.next_exec_id` so we can't hold an immutable borrow of
         // `self.fills_scratch`.
-        for i in 0..self.fills_scratch.len() {
-            let fill = self.fills_scratch[i];
+        let total_fills = self.fills_scratch.len();
+        if total_fills > 0 {
+            let last_idx = total_fills - 1;
+            for i in 0..total_fills {
+                let fill = self.fills_scratch[i];
+                let is_last = i == last_idx;
+                let report_status = if is_last {
+                    status as u8
+                } else {
+                    ExecStatus::PartiallyFilled as u8
+                };
+                let exec_id = self.next_exec();
+                let taker_report = ExecReportBody {
+                    order_id: fill.taker_order_id,
+                    exec_id,
+                    last_price: fill.price,
+                    last_qty: fill.qty,
+                    leaves_qty: if is_last { resting } else { 0 },
+                    symbol_id: body.symbol_id,
+                    status: report_status,
+                    side: body.side,
+                    _pad: [0; 2],
+                };
+                let _ = execs.try_send(OutboundExec {
+                    conn_id,
+                    body: taker_report,
+                });
+            }
+        } else {
+            // No fills — emit a single terminal report (New for resting,
+            // NoFill, or Rejected).
             let exec_id = self.next_exec();
-            let taker_report = ExecReportBody {
-                order_id: fill.taker_order_id,
+            let final_report = ExecReportBody {
+                order_id: body.order_id,
                 exec_id,
-                last_price: fill.price,
-                last_qty: fill.qty,
-                leaves_qty: 0,
+                last_price: 0,
+                last_qty: 0,
+                leaves_qty: resting,
                 symbol_id: body.symbol_id,
-                status: ExecStatus::PartiallyFilled as u8,
+                status: status as u8,
                 side: body.side,
                 _pad: [0; 2],
             };
             let _ = execs.try_send(OutboundExec {
                 conn_id,
-                body: taker_report,
+                body: final_report,
             });
         }
-
-        // Terminal status for the taker.
-        let exec_id = self.next_exec();
-        let final_report = ExecReportBody {
-            order_id: body.order_id,
-            exec_id,
-            last_price: 0,
-            last_qty: 0,
-            leaves_qty: resting,
-            symbol_id: body.symbol_id,
-            status: status as u8,
-            side: body.side,
-            _pad: [0; 2],
-        };
-        let _ = execs.try_send(OutboundExec {
-            conn_id,
-            body: final_report,
-        });
-        self.metrics.record_order(filled, self.fills_scratch.len());
+        self.metrics.record_order(filled, total_fills);
     }
 
     #[inline]
@@ -339,10 +351,17 @@ mod tests {
         eng.process_new_order(2, new_order(2, 0, Side::Buy, 100, 6), &exec_tx);
 
         let reports: Vec<_> = exec_rx.try_iter().collect();
-        // Order 1: New (resting). Order 2: maker fill (conn 0), taker fill,
-        // taker terminal.
+        // Order 1: one report with status=New (resting on the book).
+        // Order 2: one report with status=PartiallyFilled (taker filled
+        // 6, maker has leaves_qty=4 but goes back to the seller, not the
+        // buyer). For the buyer the single fill is partial-and-done? No —
+        // it's a Day limit buy, fully matched at the limit price, so
+        // status=Filled. (PartiallyFilled would only happen for IOC.)
         let statuses: Vec<u8> = reports.iter().map(|r| r.body.status).collect();
-        assert!(statuses.contains(&(ExecStatus::New as u8)));
-        assert!(statuses.contains(&(ExecStatus::PartiallyFilled as u8)));
+        assert!(statuses.contains(&(ExecStatus::New as u8)), "got {statuses:?}");
+        assert!(
+            statuses.contains(&(ExecStatus::Filled as u8)),
+            "got {statuses:?}"
+        );
     }
 }
