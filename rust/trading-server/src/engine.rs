@@ -37,7 +37,6 @@ pub struct Engine {
     books: Vec<OrderBook>,
     next_exec_id: u64,
     fills_scratch: Vec<Fill>,
-    wal_scratch: Vec<u8>,
     metrics: EngineMetrics,
 }
 
@@ -48,7 +47,6 @@ impl Engine {
             books,
             next_exec_id: 1,
             fills_scratch: Vec::with_capacity(64),
-            wal_scratch: Vec::with_capacity(256),
             metrics: EngineMetrics::new(),
         }
     }
@@ -139,6 +137,7 @@ impl Engine {
     }
 
     /// Hot path. Called directly by the benchmark and the engine loop.
+    #[inline]
     pub fn process_new_order(
         &mut self,
         conn_id: ConnId,
@@ -292,21 +291,23 @@ impl Engine {
         self.metrics.record_order(filled, self.fills_scratch.len());
     }
 
+    #[inline]
     fn next_exec(&mut self) -> u64 {
         let id = self.next_exec_id;
         self.next_exec_id = self.next_exec_id.wrapping_add(1);
         id
     }
 
-    fn wal_enqueue(&mut self, wal: &Sender<WalRecord>, record: WalRecord) {
+    #[inline]
+    fn wal_enqueue(&self, wal: &Sender<WalRecord>, record: WalRecord) {
         // Hot path must never block — use `try_send` and account for drops
         // in metrics. The user-approved trade-off: availability over
-        // in-flight durability.
-        self.wal_scratch.clear();
+        // in-flight durability. `WalRecord` is `Copy`, so no allocation.
         match wal.try_send(record) {
             Ok(()) => {}
-            Err(TrySendError::Full(_)) => self.metrics.record_wal_dropped(),
-            Err(TrySendError::Disconnected(_)) => self.metrics.record_wal_dropped(),
+            Err(TrySendError::Full(_)) | Err(TrySendError::Disconnected(_)) => {
+                self.metrics.record_wal_dropped()
+            }
         }
     }
 }

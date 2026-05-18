@@ -67,10 +67,12 @@ impl OrderBook {
         }
     }
 
+    #[inline]
     pub fn best_bid(&self) -> Option<Price> {
         self.bids.keys().next().map(|k| -*k)
     }
 
+    #[inline]
     pub fn best_ask(&self) -> Option<Price> {
         self.asks.keys().next().copied()
     }
@@ -92,6 +94,7 @@ impl OrderBook {
     ///
     /// Returns the quantity that ended up resting on the book (0 if the
     /// order fully filled, was cancelled by TIF, or was rejected).
+    #[inline]
     pub fn submit(
         &mut self,
         order_id: OrderId,
@@ -190,6 +193,7 @@ impl OrderBook {
         false
     }
 
+    #[inline]
     fn match_against(
         &mut self,
         taker_id: OrderId,
@@ -255,6 +259,7 @@ impl OrderBook {
         any_filled
     }
 
+    #[inline]
     fn rest(&mut self, order: RestingOrder) {
         let key = match order.side {
             Side::Buy => -order.price,

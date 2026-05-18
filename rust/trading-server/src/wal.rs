@@ -35,33 +35,48 @@ const FLUSH_INTERVAL: Duration = Duration::from_micros(100);
 const FLUSH_BYTES: usize = 4 * 1024;
 const SCRATCH_CAP: usize = 64 * 1024;
 
-/// A WAL record handed across the channel. Owning the bytes here keeps the
-/// writer thread independent of the engine's buffers.
-#[derive(Debug, Clone)]
-pub struct WalRecord {
-    pub record_type: u8,
-    pub payload: Vec<u8>,
+/// A WAL record handed across the channel.
+///
+/// Stored as a `Copy` enum of fixed-size POD bodies — no heap allocation
+/// when the engine constructs or sends one. Encoding to bytes happens on
+/// the WAL writer thread, off the hot path.
+#[derive(Debug, Clone, Copy)]
+pub enum WalRecord {
+    NewOrder(NewOrderBody),
+    Cancel(CancelOrderBody),
+    ExecReport(ExecReportBody),
 }
 
 impl WalRecord {
+    #[inline]
     pub fn new_order(body: NewOrderBody) -> Self {
-        Self {
-            record_type: RECORD_NEW_ORDER,
-            payload: body.as_bytes().to_vec(),
-        }
+        WalRecord::NewOrder(body)
     }
 
+    #[inline]
     pub fn cancel(body: CancelOrderBody) -> Self {
-        Self {
-            record_type: RECORD_CANCEL,
-            payload: body.as_bytes().to_vec(),
+        WalRecord::Cancel(body)
+    }
+
+    #[inline]
+    pub fn exec_report(body: ExecReportBody) -> Self {
+        WalRecord::ExecReport(body)
+    }
+
+    #[inline]
+    pub fn record_type(&self) -> u8 {
+        match self {
+            WalRecord::NewOrder(_) => RECORD_NEW_ORDER,
+            WalRecord::Cancel(_) => RECORD_CANCEL,
+            WalRecord::ExecReport(_) => RECORD_EXEC_REPORT,
         }
     }
 
-    pub fn exec_report(body: ExecReportBody) -> Self {
-        Self {
-            record_type: RECORD_EXEC_REPORT,
-            payload: body.as_bytes().to_vec(),
+    fn payload_bytes(&self) -> &[u8] {
+        match self {
+            WalRecord::NewOrder(b) => b.as_bytes(),
+            WalRecord::Cancel(b) => b.as_bytes(),
+            WalRecord::ExecReport(b) => b.as_bytes(),
         }
     }
 }
@@ -89,16 +104,18 @@ impl WalWriter {
 
     pub fn append(&mut self, record: &WalRecord) -> Result<(), Error> {
         self.scratch.clear();
-        let body_len = 1 + record.payload.len();
+        let record_type = record.record_type();
+        let payload = record.payload_bytes();
+        let body_len = 1 + payload.len();
         let len = (4 + body_len) as u32; // crc(4) + record_type(1) + payload
         let mut crc = crc32fast::Hasher::new();
-        crc.update(std::slice::from_ref(&record.record_type));
-        crc.update(&record.payload);
+        crc.update(std::slice::from_ref(&record_type));
+        crc.update(payload);
         let crc = crc.finalize();
         self.scratch.extend_from_slice(&len.to_le_bytes());
         self.scratch.extend_from_slice(&crc.to_le_bytes());
-        self.scratch.push(record.record_type);
-        self.scratch.extend_from_slice(&record.payload);
+        self.scratch.push(record_type);
+        self.scratch.extend_from_slice(payload);
         self.file.write_all(&self.scratch)?;
         self.pending_bytes += self.scratch.len();
         Ok(())
@@ -158,8 +175,15 @@ fn run(path: PathBuf, inbox: Receiver<WalRecord>) -> Result<(), Error> {
     }
 }
 
-/// Read back every record in a WAL file. Used by tests; not in the hot path.
-pub fn read_all(path: impl AsRef<Path>) -> Result<Vec<WalRecord>, Error> {
+/// A raw record decoded from disk. Returned by `read_all` for tests and
+/// recovery tooling — not used on the hot path.
+#[derive(Debug, Clone)]
+pub struct DecodedRecord {
+    pub record_type: u8,
+    pub payload: Vec<u8>,
+}
+
+pub fn read_all(path: impl AsRef<Path>) -> Result<Vec<DecodedRecord>, Error> {
     use std::io::Read;
     let mut f = File::open(path)?;
     let mut buf = Vec::new();
@@ -183,7 +207,7 @@ pub fn read_all(path: impl AsRef<Path>) -> Result<Vec<WalRecord>, Error> {
         h.update(&payload);
         let actual = h.finalize();
         debug_assert_eq!(crc, actual, "wal crc mismatch");
-        out.push(WalRecord {
+        out.push(DecodedRecord {
             record_type,
             payload,
         });
@@ -216,7 +240,7 @@ mod tests {
             tif: Tif::Day as u8,
             _pad: 0,
             _pad2: 0,
-        _pad3: 0,
+            _pad3: 0,
         }
     }
 
@@ -225,7 +249,9 @@ mod tests {
         let path = tempfile_path("roundtrip");
         let mut writer = WalWriter::create(&path).unwrap();
         for i in 0..100 {
-            writer.append(&WalRecord::new_order(sample_order(i))).unwrap();
+            writer
+                .append(&WalRecord::new_order(sample_order(i)))
+                .unwrap();
         }
         writer.flush().unwrap();
         drop(writer);
@@ -234,8 +260,8 @@ mod tests {
         assert_eq!(records.len(), 100);
         for (i, r) in records.iter().enumerate() {
             assert_eq!(r.record_type, RECORD_NEW_ORDER);
-            let expected = WalRecord::new_order(sample_order(i as u64));
-            assert_eq!(r.payload, expected.payload);
+            let expected_body = sample_order(i as u64);
+            assert_eq!(r.payload, expected_body.as_bytes());
         }
         let _ = std::fs::remove_file(&path);
     }

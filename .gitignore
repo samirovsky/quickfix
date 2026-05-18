@@ -57,5 +57,5 @@ autom4te.cache/
 lib/python
 COPYING
 INSTALL
-trading-server/target/
-trading-server/Cargo.lock
+rust/**/target/
+rust/**/Cargo.lock

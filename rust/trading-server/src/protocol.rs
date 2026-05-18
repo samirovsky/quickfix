@@ -47,6 +47,7 @@ pub enum Side {
 }
 
 impl Side {
+    #[inline]
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(Side::Buy),
@@ -55,6 +56,7 @@ impl Side {
         }
     }
 
+    #[inline]
     pub fn opposite(self) -> Self {
         match self {
             Side::Buy => Side::Sell,
@@ -71,6 +73,7 @@ pub enum OrdType {
 }
 
 impl OrdType {
+    #[inline]
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(OrdType::Limit),
@@ -90,6 +93,7 @@ pub enum Tif {
 }
 
 impl Tif {
+    #[inline]
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0 => Some(Tif::Day),
