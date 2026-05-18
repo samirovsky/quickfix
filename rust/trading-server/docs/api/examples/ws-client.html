@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>QFTX WebSocket demo</title>
+  <style>
+    body  { font: 14px/1.4 system-ui, sans-serif; max-width: 720px; margin: 2em auto; }
+    pre   { background: #f4f4f4; padding: 1em; overflow-x: auto; }
+    .ok   { color: #0a0; }
+    .err  { color: #c00; }
+    button { padding: .5em 1em; }
+  </style>
+</head>
+<body>
+
+<h1>QFTX WebSocket demo</h1>
+<p>
+  Open <code>cargo run --release</code> in the trading-server crate, then
+  click the button below. The page will place a resting buy-5-@-100 order
+  through the WebSocket transport and log the execution report it gets back.
+</p>
+<p>WS URL: <code id="url">ws://127.0.0.1:9002/ws</code></p>
+<button id="go">Place buy 5 @ 100</button>
+<pre id="log"></pre>
+
+<script>
+const PRICE_SCALE = 100_000_000n;
+const HEADER = 32, NEW_ORDER = 48, EXEC_REPORT = 48;
+const MAGIC  = 0x51465458; // "QFTX" LE
+
+const STATUS = { 0: "New", 1: "PartiallyFilled", 2: "Filled", 3: "Cancelled", 4: "Rejected" };
+
+const logEl = document.getElementById("log");
+function log(msg, cls)   { const span = document.createElement("span"); span.className = cls || ""; span.textContent = msg + "\n"; logEl.appendChild(span); }
+
+function buildNewOrder({ seq, orderId, side, priceWhole, qty, symbolId = 0, clientId = 1 }) {
+  const buf = new ArrayBuffer(HEADER + NEW_ORDER);
+  const dv  = new DataView(buf);
+  // Header
+  dv.setBigUint64(0,  BigInt(seq),                                 true);
+  dv.setBigUint64(8,  BigInt(Date.now()) * 1_000_000n,             true);
+  dv.setUint32   (16, MAGIC,                                       true);
+  dv.setUint32   (20, NEW_ORDER,                                   true);
+  dv.setUint8    (24, 1);                                                 // version
+  dv.setUint8    (25, 1);                                                 // msg_type = NewOrder
+  // NewOrder body
+  dv.setBigInt64 (32 + 0,  BigInt(priceWhole) * PRICE_SCALE, true);       // price
+  dv.setBigUint64(32 + 8,  BigInt(qty),                      true);       // qty
+  dv.setBigUint64(32 + 16, BigInt(clientId),                 true);       // client_id
+  dv.setBigUint64(32 + 24, BigInt(orderId),                  true);       // order_id
+  dv.setUint32   (32 + 32, symbolId,                         true);       // symbol_id
+  dv.setUint8    (32 + 36, side);                                          // 0 = Buy, 1 = Sell
+  dv.setUint8    (32 + 37, 0);                                             // ord_type = Limit
+  dv.setUint8    (32 + 38, 0);                                             // tif = Day
+  return buf;
+}
+
+function parseExecReport(arrayBuf) {
+  const dv = new DataView(arrayBuf);
+  return {
+    seq:         dv.getBigUint64(0, true),
+    status:      dv.getUint8   (32 + 44),
+    order_id:    dv.getBigUint64(32 + 0,  true),
+    last_price:  dv.getBigInt64 (32 + 16, true),
+    last_qty:    dv.getBigUint64(32 + 24, true),
+    leaves_qty:  dv.getBigUint64(32 + 32, true),
+  };
+}
+
+document.getElementById("go").onclick = () => {
+  const url = document.getElementById("url").textContent;
+  const ws = new WebSocket(url, "qftx-binary.v1");
+  ws.binaryType = "arraybuffer";
+
+  ws.onopen  = () => {
+    log(`open  → ${url}`, "ok");
+    ws.send(buildNewOrder({ seq: 1, orderId: 1, side: 0, priceWhole: 100, qty: 5 }));
+  };
+  ws.onmessage = ev => {
+    const r = parseExecReport(ev.data);
+    log(`exec  order_id=${r.order_id} status=${STATUS[r.status]} last_qty=${r.last_qty} leaves_qty=${r.leaves_qty}`);
+  };
+  ws.onerror = e  => log(`error ${e}`, "err");
+  ws.onclose = ev => log(`close code=${ev.code} reason="${ev.reason}"`);
+};
+</script>
+
+</body>
+</html>

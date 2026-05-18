@@ -2,6 +2,7 @@
 
 Low-latency order-matching trading server, written in Rust.
 
+* Three client transports against the same matching engine: raw QFTX binary over TCP, gRPC (`tonic`), and WebSocket (`tokio-tungstenite`). See [`docs/api/`](./docs/api/) for the full reference.
 * Custom binary wire protocol (more compact and cheaper to parse than FIX).
 * Pluggable market-data layer — any provider (file replay, multicast, ITCH, websocket) can implement `MarketDataProvider` and feed the engine.
 * Single-threaded matching core; **`process_new_order` p99 < 1 ms**, enforced by `tests/latency_gate.rs`. Measured on a generic dev container at p50 ≈ 90 ns, p99 ≈ 150 ns, p99.9 ≈ 290 ns over 100k iterations against a populated book (10k resting orders, 100 levels per side).
@@ -79,9 +80,15 @@ cargo bench
 ## Running the server
 
 ```bash
-TRADING_BIND=127.0.0.1:9000 TRADING_SYMBOLS=64 TRADING_WAL=./trading.wal \
+TRADING_BIND=127.0.0.1:9000       \
+TRADING_GRPC_BIND=127.0.0.1:9001  \
+TRADING_WS_BIND=127.0.0.1:9002    \
+TRADING_SYMBOLS=64                \
+TRADING_WAL=./trading.wal         \
   cargo run --release
 ```
+
+Set any of `TRADING_GRPC_BIND` / `TRADING_WS_BIND` to the empty string to disable that listener.
 
 ## What is intentionally out of scope
 

@@ -30,13 +30,37 @@ use crate::ConnId;
 const READ_BUF_CAP: usize = 64 * 1024;
 const PER_CONN_QUEUE: usize = 1024;
 
+/// Per-connection outbound sink.
+///
+/// `Sync` is used by the std-thread TCP writer (existing fast path).
+/// `Async` is used by gRPC stream handlers and per-connection WebSocket
+/// tasks living on the tokio runtime — `tokio::sync::mpsc::UnboundedSender`
+/// is callable from non-tokio threads and never blocks, so the
+/// `exec-dispatcher` thread can push outbound bytes uniformly regardless
+/// of which transport the client used.
+#[derive(Debug)]
+pub enum ConnSender {
+    Sync(Sender<Vec<u8>>),
+    Async(tokio::sync::mpsc::UnboundedSender<Vec<u8>>),
+}
+
+impl ConnSender {
+    #[inline]
+    pub fn try_send(&self, bytes: Vec<u8>) -> bool {
+        match self {
+            ConnSender::Sync(tx) => tx.try_send(bytes).is_ok(),
+            ConnSender::Async(tx) => tx.send(bytes).is_ok(),
+        }
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct ConnRegistry {
-    inner: RwLock<FxHashMap<ConnId, Sender<Vec<u8>>>>,
+    inner: RwLock<FxHashMap<ConnId, ConnSender>>,
 }
 
 impl ConnRegistry {
-    pub fn register(&self, id: ConnId, sender: Sender<Vec<u8>>) {
+    pub fn register(&self, id: ConnId, sender: ConnSender) {
         self.inner.write().insert(id, sender);
     }
 
@@ -44,13 +68,30 @@ impl ConnRegistry {
         self.inner.write().remove(&id);
     }
 
+    #[inline]
     pub fn try_send(&self, id: ConnId, bytes: Vec<u8>) -> bool {
         let guard = self.inner.read();
         if let Some(tx) = guard.get(&id) {
-            tx.try_send(bytes).is_ok()
+            tx.try_send(bytes)
         } else {
             false
         }
+    }
+}
+
+/// Monotonic connection-id source shared across every transport (TCP,
+/// gRPC, WebSocket) so the engine sees a single global ConnId space.
+#[derive(Debug, Default)]
+pub struct ConnIdAllocator(AtomicU64);
+
+impl ConnIdAllocator {
+    pub fn new() -> Self {
+        Self(AtomicU64::new(1))
+    }
+
+    #[inline]
+    pub fn allocate(&self) -> ConnId {
+        self.0.fetch_add(1, Ordering::Relaxed)
     }
 }
 
@@ -58,7 +99,7 @@ pub struct Server {
     listener: TcpListener,
     engine_tx: Sender<EngineMsg>,
     registry: Arc<ConnRegistry>,
-    next_conn_id: Arc<AtomicU64>,
+    next_conn_id: Arc<ConnIdAllocator>,
     running: Arc<AtomicBool>,
 }
 
@@ -75,13 +116,14 @@ impl Server {
         addr: SocketAddr,
         engine_tx: Sender<EngineMsg>,
         registry: Arc<ConnRegistry>,
+        next_conn_id: Arc<ConnIdAllocator>,
     ) -> Result<Self, Error> {
         let listener = TcpListener::bind(addr)?;
         Ok(Self {
             listener,
             engine_tx,
             registry,
-            next_conn_id: Arc::new(AtomicU64::new(1)),
+            next_conn_id,
             running: Arc::new(AtomicBool::new(true)),
         })
     }
@@ -106,12 +148,12 @@ impl Server {
             }
             match self.listener.accept() {
                 Ok((sock, peer)) => {
-                    let id = self.next_conn_id.fetch_add(1, Ordering::Relaxed);
+                    let id = self.next_conn_id.allocate();
                     info!(conn = id, ?peer, "client connected");
                     sock.set_nodelay(true).ok();
                     sock.set_nonblocking(false).ok();
                     let (out_tx, out_rx) = crossbeam_channel::bounded(PER_CONN_QUEUE);
-                    self.registry.register(id, out_tx);
+                    self.registry.register(id, ConnSender::Sync(out_tx));
                     let reader_sock = sock.try_clone()?;
                     let engine_tx = self.engine_tx.clone();
                     let registry = Arc::clone(&self.registry);

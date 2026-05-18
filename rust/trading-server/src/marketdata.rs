@@ -42,6 +42,52 @@ pub enum MarketDataEvent {
     },
 }
 
+impl MarketDataEvent {
+    pub fn symbol_id(&self) -> SymbolId {
+        match self {
+            MarketDataEvent::Trade { symbol_id, .. }
+            | MarketDataEvent::Quote { symbol_id, .. }
+            | MarketDataEvent::BookSnapshot { symbol_id, .. } => *symbol_id,
+        }
+    }
+}
+
+/// Broadcast fan-out for market-data subscribers (gRPC `SubscribeMarketData`,
+/// future WS subscriptions). The engine — or an external feed adapter —
+/// publishes events; subscribers each hold a `tokio::sync::broadcast::Receiver`
+/// and filter by `symbol_id` on their side.
+///
+/// `broadcast` drops the oldest events on slow subscribers, matching the
+/// "availability over completeness" policy used by the WAL.
+#[derive(Debug, Clone)]
+pub struct MarketDataBus {
+    tx: tokio::sync::broadcast::Sender<MarketDataEvent>,
+}
+
+impl MarketDataBus {
+    pub fn new(capacity: usize) -> Self {
+        let (tx, _) = tokio::sync::broadcast::channel(capacity);
+        Self { tx }
+    }
+
+    /// Publish an event. Returns the current subscriber count (0 if no one
+    /// is listening; the message is dropped silently in that case).
+    #[inline]
+    pub fn publish(&self, ev: MarketDataEvent) -> usize {
+        self.tx.send(ev).unwrap_or(0)
+    }
+
+    pub fn subscribe(&self) -> tokio::sync::broadcast::Receiver<MarketDataEvent> {
+        self.tx.subscribe()
+    }
+}
+
+impl Default for MarketDataBus {
+    fn default() -> Self {
+        Self::new(1024)
+    }
+}
+
 pub trait MarketDataProvider: Send {
     /// Name for logging.
     fn name(&self) -> &str;

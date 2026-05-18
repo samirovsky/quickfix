@@ -10,12 +10,24 @@
 
 pub mod engine;
 pub mod error;
+pub mod grpc;
 pub mod marketdata;
 pub mod metrics;
 pub mod orderbook;
 pub mod protocol;
 pub mod server;
 pub mod wal;
+pub mod ws;
+
+/// Generated protobuf types and tonic stubs for the gRPC TradingService.
+///
+/// The descriptors come from `proto/trading.proto`; `build.rs` compiles
+/// them with `tonic-build` at build time. Re-exported here so downstream
+/// crates can use `trading_server::pb::trading_service_client::*`
+/// without having to know the include-macro details.
+pub mod pb {
+    tonic::include_proto!("qftx.trading.v1");
+}
 
 pub use error::Error;
 

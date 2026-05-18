@@ -17,7 +17,7 @@ use trading_server::protocol::{
     self, CancelOrderBody, ExecReportBody, ExecStatus, Header, NewOrderBody, OrdType, Side,
     Tif, EXEC_REPORT_SIZE, HEADER_SIZE,
 };
-use trading_server::server::{spawn_exec_dispatcher, ConnRegistry, Server};
+use trading_server::server::{spawn_exec_dispatcher, ConnIdAllocator, ConnRegistry, Server};
 use trading_server::wal::WalRecord;
 use trading_server::PRICE_SCALE;
 
@@ -59,6 +59,7 @@ fn cross_two_clients_emits_fills() {
         "127.0.0.1:0".parse().unwrap(),
         engine_tx,
         Arc::clone(&registry),
+        Arc::new(ConnIdAllocator::new()),
     )
     .expect("bind");
     let addr = server.local_addr().unwrap();

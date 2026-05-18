@@ -28,9 +28,21 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 core_affinity = "0.8"
 crc32fast = "1"
+tokio = { version = "1", features = ["rt-multi-thread", "net", "sync", "macros", "signal", "time", "io-util"] }
+tonic = "0.12"
+prost = "0.13"
+tokio-tungstenite = "0.24"
+bytes = "1"
+futures-util = { version = "0.3", default-features = false, features = ["std"] }
+async-stream = "0.3"
+http = "1"
+
+[build-dependencies]
+tonic-build = "0.12"
 
 [dev-dependencies]
 criterion = "0.5"
+tokio-stream = "0.1"
 
 [[bench]]
 name = "order_latency"
