@@ -1,0 +1,51 @@
+[package]
+name = "trading-server"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Low-latency Rust trading server with a custom binary protocol, pluggable market data, and async WAL."
+license = "BSD-3-Clause"
+publish = false
+
+[lib]
+name = "trading_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "trading-server"
+path = "src/main.rs"
+
+[dependencies]
+zerocopy = { version = "0.7", features = ["derive"] }
+crossbeam-channel = "0.5"
+rustc-hash = "1.1"
+mimalloc = { version = "0.1", default-features = false }
+hdrhistogram = "7"
+parking_lot = "0.12"
+thiserror = "1"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+core_affinity = "0.8"
+crc32fast = "1"
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "order_latency"
+harness = false
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = 1
+panic = "abort"
+overflow-checks = false
+
+[profile.bench]
+opt-level = 3
+lto = "thin"
+codegen-units = 1
+debug = 1
