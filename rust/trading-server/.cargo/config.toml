@@ -1,5 +1,0 @@
-# Build for the host CPU so the optimizer can use AVX2/AVX-512/BMI/etc.
-# This sacrifices binary portability for latency — the right trade for a
-# co-located trading server.
-[build]
-rustflags = ["-C", "target-cpu=native"]

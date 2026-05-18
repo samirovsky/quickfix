@@ -223,18 +223,15 @@ impl Engine {
             }
         };
 
-        // Emit one exec report per fill for the taker, plus one per fill for
-        // the maker. Maker conn_id is unknown without a client-id ↔ conn map;
-        // for this PR we route maker reports to conn_id 0 (drop on the floor
-        // unless a client listens on that conn). This keeps the hot path
-        // free of cross-connection bookkeeping.
+        // Emit one exec report per fill for the taker, then a terminal
+        // report. Maker reports are intentionally omitted: this server has
+        // no client-id ↔ conn map, so they would route to conn_id=0 and be
+        // dropped by the dispatcher. Skipping the construction + try_send
+        // saves a CAS per fill on the hot path.
         //
         // Iterate by index — `Fill` is `Copy`, and the loop body mutates
         // `self.next_exec_id` so we can't hold an immutable borrow of
         // `self.fills_scratch`.
-        let opposite_side = Side::from_u8(body.side)
-            .map(|s| s.opposite() as u8)
-            .unwrap_or(0);
         for i in 0..self.fills_scratch.len() {
             let fill = self.fills_scratch[i];
             let exec_id = self.next_exec();
@@ -252,22 +249,6 @@ impl Engine {
             let _ = execs.try_send(OutboundExec {
                 conn_id,
                 body: taker_report,
-            });
-            let exec_id = self.next_exec();
-            let maker_report = ExecReportBody {
-                order_id: fill.maker_order_id,
-                exec_id,
-                last_price: fill.price,
-                last_qty: fill.qty,
-                leaves_qty: 0,
-                symbol_id: body.symbol_id,
-                status: ExecStatus::PartiallyFilled as u8,
-                side: opposite_side,
-                _pad: [0; 2],
-            };
-            let _ = execs.try_send(OutboundExec {
-                conn_id: 0,
-                body: maker_report,
             });
         }
 
