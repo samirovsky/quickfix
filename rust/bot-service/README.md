@@ -38,13 +38,30 @@ Errors are JSON `{ "error": "...", "code": "..." }`.
 
 ## Configuration
 
-| Env var                  | Default                       | Purpose                                                              |
-| ------------------------ | ----------------------------- | -------------------------------------------------------------------- |
-| `BOT_SERVICE_BIND`       | `127.0.0.1:9100`              | Listen address.                                                       |
-| `BOT_SERVICE_DB`         | `sqlite://bot-service.sqlite` | sqlx URL. Use `sqlite::memory:` for ephemeral local dev.              |
-| `BOT_SERVICE_KEYS`       | _none_                        | Optional path to a JSON file of `[{ "name", "api_key" }, ...]`. Seeded on startup. Local-dev convenience only. |
-| `BOT_SERVICE_SEED_DEMO`  | _none_                        | Set to `1` to seed two demo users (`alice` / `bob`), three published bots, and 30 days of synthetic trades. Idempotent — skips if the marketplace already has listings. |
-| `RUST_LOG`               | `info`                        | `tracing` filter.                                                    |
+| Env var                      | Default                       | Purpose                                                              |
+| ---------------------------- | ----------------------------- | -------------------------------------------------------------------- |
+| `BOT_SERVICE_BIND`           | `127.0.0.1:9100`              | Listen address.                                                       |
+| `BOT_SERVICE_DB`             | `sqlite://bot-service.sqlite` | sqlx URL. Use `sqlite::memory:` for ephemeral local dev.              |
+| `BOT_SERVICE_KEYS`           | _none_                        | Optional path to a JSON file of `[{ "name", "api_key" }, ...]`. Seeded on startup. Local-dev convenience only. |
+| `BOT_SERVICE_SEED_DEMO`      | _none_                        | Set to `1` to seed two demo users (`alice` / `bob`), three published bots, and 30 days of synthetic trades. Idempotent — skips if the marketplace already has listings. |
+| `BOT_SERVICE_CORS_ORIGINS`   | _none_                        | Comma-separated allowlist for CORS (e.g. `https://app.vercel.app`). `*` is allowed for demos but never echoes back credentials. Leave empty for same-origin (local dev). |
+| `RUST_LOG`                   | `info`                        | `tracing` filter.                                                    |
+
+## Container
+
+A multi-stage `Dockerfile` is included for deployment:
+
+```bash
+docker build -t bot-service -f rust/bot-service/Dockerfile .
+docker run --rm -p 9100:9100 \
+  -v $(pwd)/data:/data \
+  -e BOT_SERVICE_DB=sqlite:///data/bot.sqlite \
+  -e BOT_SERVICE_SEED_DEMO=1 \
+  -e BOT_SERVICE_CORS_ORIGINS='*' \
+  bot-service
+```
+
+The full deploy story (Vercel + Fly.io/Render, mixed-content gotchas) is in [`../../clients/mobile/DEPLOY.md`](../../clients/mobile/DEPLOY.md).
 
 Demo keys printed at startup when `BOT_SERVICE_SEED_DEMO=1`:
 - `demo-alice-please-rotate`

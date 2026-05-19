@@ -28,5 +28,9 @@ async fn main() -> anyhow::Result<()> {
             .context("seeding demo data")?;
     }
 
-    bot_service::serve(cfg.bind, state).await
+    let cors = bot_service::cors_layer(&cfg.cors_origins);
+    if !cfg.cors_origins.is_empty() {
+        tracing::info!(origins = ?cfg.cors_origins, "CORS enabled");
+    }
+    bot_service::serve(cfg.bind, state, cors).await
 }

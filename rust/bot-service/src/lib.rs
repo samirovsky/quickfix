@@ -9,11 +9,13 @@ use std::path::Path;
 use std::sync::Arc;
 
 use anyhow::{Context, Result};
+use axum::http::{HeaderName, HeaderValue, Method};
 use axum::middleware;
 use axum::routing::{get, post};
 use axum::Router;
 use sqlx::SqlitePool;
 use tokio::net::TcpListener;
+use tower_http::cors::{Any, CorsLayer};
 use tower_http::trace::TraceLayer;
 
 pub mod auth;
@@ -46,7 +48,51 @@ pub async fn build_state(database_url: &str) -> Result<AppState> {
     Ok(AppState { db, templates })
 }
 
+/// Build a [`CorsLayer`] from a list of allowed origins.
+///
+/// - Empty list → CORS layer is **not** applied; the caller decides.
+/// - `["*"]` → any-origin without credentials (demo / public API).
+/// - Otherwise → exact allowlist with `X-API-Key` and `Content-Type`
+///   allowed in requests, suitable for a deployed UI calling a
+///   deployed bot-service across origins.
+pub fn cors_layer(origins: &[String]) -> Option<CorsLayer> {
+    if origins.is_empty() {
+        return None;
+    }
+    let methods = [
+        Method::GET,
+        Method::POST,
+        Method::PUT,
+        Method::DELETE,
+        Method::OPTIONS,
+    ];
+    let headers: [HeaderName; 2] = [
+        HeaderName::from_static("x-api-key"),
+        HeaderName::from_static("content-type"),
+    ];
+    let layer = if origins.iter().any(|o| o == "*") {
+        CorsLayer::new()
+            .allow_origin(Any)
+            .allow_methods(methods)
+            .allow_headers(headers)
+    } else {
+        let parsed: Vec<HeaderValue> = origins
+            .iter()
+            .filter_map(|o| HeaderValue::from_str(o).ok())
+            .collect();
+        CorsLayer::new()
+            .allow_origin(parsed)
+            .allow_methods(methods)
+            .allow_headers(headers)
+    };
+    Some(layer)
+}
+
 pub fn router(state: AppState) -> Router {
+    router_with_cors(state, None)
+}
+
+pub fn router_with_cors(state: AppState, cors: Option<CorsLayer>) -> Router {
     let authed = Router::new()
         .route("/v1/templates", get(routes::templates::list))
         .route("/v1/templates/:id", get(routes::templates::get))
@@ -105,11 +151,17 @@ pub fn router(state: AppState) -> Router {
             auth::require_api_key,
         ));
 
-    Router::new()
+    let app = Router::new()
         .route("/healthz", get(routes::health::healthz))
         .merge(authed)
-        .layer(TraceLayer::new_for_http())
-        .with_state(state)
+        .layer(TraceLayer::new_for_http());
+    let app = match cors {
+        // CORS sits outside everything so preflight OPTIONS short-circuit
+        // before they hit the auth middleware.
+        Some(layer) => app.layer(layer),
+        None => app,
+    };
+    app.with_state(state)
 }
 
 pub async fn seed_keys_from_file(state: &AppState, path: &Path) -> Result<()> {
@@ -126,8 +178,8 @@ pub async fn seed_keys_from_file(state: &AppState, path: &Path) -> Result<()> {
 
 /// Build the router around `state` and serve it on `addr`. Intended both
 /// for `main.rs` and for integration tests that need a live server.
-pub async fn serve(addr: SocketAddr, state: AppState) -> Result<()> {
-    let app = router(state);
+pub async fn serve(addr: SocketAddr, state: AppState, cors: Option<CorsLayer>) -> Result<()> {
+    let app = router_with_cors(state, cors);
     let listener = TcpListener::bind(addr).await?;
     let real_addr = listener.local_addr()?;
     tracing::info!(addr = %real_addr, "bot-service listening");

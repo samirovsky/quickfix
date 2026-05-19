@@ -11,6 +11,13 @@ pub struct ServiceConfig {
     pub database_url: String,
     pub seed_keys_path: Option<String>,
     pub seed_demo: bool,
+    /// Comma-separated list of allowed CORS origins. Empty list (or
+    /// missing env var) → CORS is **not** applied; the service responds
+    /// only to same-origin clients, suitable for local dev. Set to a
+    /// concrete list (e.g. `https://qftx.vercel.app`) for production.
+    /// `*` means "any origin" — convenient for demos, never use with
+    /// real auth.
+    pub cors_origins: Vec<String>,
 }
 
 impl ServiceConfig {
@@ -25,11 +32,22 @@ impl ServiceConfig {
         let seed_demo = env::var("BOT_SERVICE_SEED_DEMO")
             .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
             .unwrap_or(false);
+        let cors_origins = env::var("BOT_SERVICE_CORS_ORIGINS")
+            .ok()
+            .filter(|s| !s.trim().is_empty())
+            .map(|s| {
+                s.split(',')
+                    .map(|p| p.trim().to_string())
+                    .filter(|p| !p.is_empty())
+                    .collect()
+            })
+            .unwrap_or_default();
         Self {
             bind,
             database_url,
             seed_keys_path,
             seed_demo,
+            cors_origins,
         }
     }
 }
