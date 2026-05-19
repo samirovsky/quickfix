@@ -8,7 +8,7 @@ Runs on iOS, Android, and the web from a single codebase.
 
 | Screen        | Purpose                                                                                  |
 | ------------- | ---------------------------------------------------------------------------------------- |
-| Connect       | WebSocket URL + bot-service URL/key, persisted to AsyncStorage, live status badge        |
+| Connect       | Demo-mode toggle (mock data, no backend) + WebSocket URL + bot-service URL/key, persisted to AsyncStorage, live status badge |
 | Build         | Your own bots: list, create from template, edit risk parameters, publish to marketplace |
 | Marketplace   | Browse published bots, see creator + price + subscriber count, tap into a listing       |
 | Listing detail| Performance chart (7/30/90d), win-rate / best / worst, subscribe with allocated capital |
@@ -84,9 +84,10 @@ See [`../../rust/trading-server/docs/api/binary-protocol.md`](../../rust/trading
 
 ## Deploying the web build
 
+The app defaults to **Demo mode**, so the deployed static site works standalone with in-app mock data — no backend needed:
+
 ```bash
-npm run vercel-build       # produces dist/ — a static SPA
-npx vercel deploy --prod   # uploads dist/ and prints a *.vercel.app URL
+npx vercel deploy --prod   # builds + uploads, prints a *.vercel.app URL
 ```
 
-See [`DEPLOY.md`](./DEPLOY.md) for the Git-integration path and the **`ws://` mixed-content gotcha** that affects any deployed HTTPS site connecting to a local trading server.
+See [`DEPLOY.md`](./DEPLOY.md) for the real-backend path (bot-service on Fly/Render + CORS) and the **`ws://` mixed-content gotcha** that affects the Trade tab connecting to a trading server.

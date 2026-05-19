@@ -126,44 +126,84 @@ export const ConnectScreen: React.FC = () => {
           </Card>
 
           <Card title="Bot service (marketplace)">
-            <Text style={[styles.label, { color: colors.textMuted }]}>HTTP URL</Text>
-            <TextInput
-              value={values.botServiceUrl}
-              onChangeText={t => update({ botServiceUrl: t })}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="url"
-              placeholder="http://10.0.2.2:9100"
-              placeholderTextColor={colors.textMuted}
+            <Pressable
+              onPress={() => update({ demoMode: !values.demoMode })}
               style={[
-                styles.input,
-                { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
+                styles.demoRow,
+                { borderColor: colors.border, backgroundColor: colors.bgElevated },
               ]}
-            />
-            <Text style={[styles.label, { color: colors.textMuted, marginTop: 12 }]}>
-              API key
-            </Text>
-            <TextInput
-              value={values.botServiceKey}
-              onChangeText={t => update({ botServiceKey: t })}
-              autoCapitalize="none"
-              autoCorrect={false}
-              secureTextEntry
-              placeholder="X-API-Key for bot-service"
-              placeholderTextColor={colors.textMuted}
-              style={[
-                styles.input,
-                { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
-              ]}
-            />
-            <Text style={[styles.help, { color: colors.textMuted }]}>
-              Run the server with{' '}
-              <Text style={styles.mono}>BOT_SERVICE_SEED_DEMO=1</Text>{' '}
-              to get two pre-provisioned keys:{' '}
-              <Text style={styles.mono}>demo-alice-please-rotate</Text>
-              {' '}/{' '}
-              <Text style={styles.mono}>demo-bob-please-rotate</Text>.
-            </Text>
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ color: colors.text, fontWeight: '600' }}>Demo mode</Text>
+                <Text style={[styles.help, { color: colors.textMuted, marginTop: 2 }]}>
+                  Run the Build / Market / Subscriptions tabs against in-app mock data —
+                  no backend required. Turn off to use a real bot-service.
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.toggle,
+                  {
+                    backgroundColor: values.demoMode ? colors.primary : colors.border,
+                  },
+                ]}
+              >
+                <View
+                  style={[
+                    styles.knob,
+                    {
+                      backgroundColor: colors.primaryFg,
+                      alignSelf: values.demoMode ? 'flex-end' : 'flex-start',
+                    },
+                  ]}
+                />
+              </View>
+            </Pressable>
+
+            {!values.demoMode && (
+              <>
+                <Text style={[styles.label, { color: colors.textMuted, marginTop: 12 }]}>
+                  HTTP URL
+                </Text>
+                <TextInput
+                  value={values.botServiceUrl}
+                  onChangeText={t => update({ botServiceUrl: t })}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="url"
+                  placeholder="http://10.0.2.2:9100"
+                  placeholderTextColor={colors.textMuted}
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
+                  ]}
+                />
+                <Text style={[styles.label, { color: colors.textMuted, marginTop: 12 }]}>
+                  API key
+                </Text>
+                <TextInput
+                  value={values.botServiceKey}
+                  onChangeText={t => update({ botServiceKey: t })}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  secureTextEntry
+                  placeholder="X-API-Key for bot-service"
+                  placeholderTextColor={colors.textMuted}
+                  style={[
+                    styles.input,
+                    { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
+                  ]}
+                />
+                <Text style={[styles.help, { color: colors.textMuted }]}>
+                  Run the server with{' '}
+                  <Text style={styles.mono}>BOT_SERVICE_SEED_DEMO=1</Text>{' '}
+                  to get two pre-provisioned keys:{' '}
+                  <Text style={styles.mono}>demo-alice-please-rotate</Text>
+                  {' '}/{' '}
+                  <Text style={styles.mono}>demo-bob-please-rotate</Text>.
+                </Text>
+              </>
+            )}
           </Card>
 
           {conn.kind === 'error' && (
@@ -206,6 +246,22 @@ const styles = StyleSheet.create({
   },
   help: { fontSize: 11, marginTop: 8, lineHeight: 16 },
   mono: { fontFamily: Platform.select({ ios: 'Menlo', android: 'monospace' }) },
+  demoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  toggle: {
+    width: 44,
+    height: 26,
+    borderRadius: 13,
+    padding: 3,
+    justifyContent: 'center',
+  },
+  knob: { width: 20, height: 20, borderRadius: 10 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 12 },
   btn: { flex: 1, paddingVertical: 12, borderRadius: 8, alignItems: 'center' },
   btnSecondary: { backgroundColor: 'transparent', borderWidth: StyleSheet.hairlineWidth },

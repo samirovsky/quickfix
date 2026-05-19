@@ -30,8 +30,8 @@ export const TemplatePickerScreen: React.FC = () => {
   // Re-configure if the user just edited the URL/key — same pattern as
   // the other tabs.
   useEffect(() => {
-    configure(values.botServiceUrl, values.botServiceKey);
-  }, [values.botServiceUrl, values.botServiceKey, configure]);
+    configure({ demoMode: values.demoMode, baseUrl: values.botServiceUrl, apiKey: values.botServiceKey });
+  }, [values.demoMode, values.botServiceUrl, values.botServiceKey, configure]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName] = useState('');

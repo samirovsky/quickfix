@@ -16,6 +16,11 @@ export interface Settings {
   // Marketplace tab is functional.
   botServiceUrl: string;
   botServiceKey: string;
+  // When true, the bot-platform tabs run against an in-memory mock
+  // instead of a real bot-service — lets the deployed web build work
+  // standalone with no backend. Defaults on so a fresh deploy is
+  // explorable immediately; turn it off to point at a real service.
+  demoMode: boolean;
 }
 
 const DEFAULTS: Settings = {
@@ -25,6 +30,7 @@ const DEFAULTS: Settings = {
   symbolCount: 64,
   botServiceUrl: 'http://10.0.2.2:9100',
   botServiceKey: '',
+  demoMode: true,
 };
 
 interface SettingsStore {

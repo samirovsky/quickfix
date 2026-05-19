@@ -1,6 +1,24 @@
-# Deploying QFTX (mobile web + bot-service)
+# Deploying QFTX
 
-A working live URL needs **two** deploys: the mobile web bundle (static SPA) and the bot-service API (Rust container with persistent volume for sqlite). The Trade tab also needs the trading-server's WebSocket, but the BUILD / MARKET / SUBS flows work standalone with just the bot-service.
+## Fastest path: one command, no backend
+
+The app ships with **Demo mode on by default** — the Build / Market / Subscriptions tabs run against in-app mock data, so the deployed web build is fully explorable with **zero backend, no CORS, no secrets**. To get a public URL you only deploy the static site:
+
+```bash
+cd clients/mobile
+npx vercel login         # first time only — opens a browser
+npx vercel deploy --prod # prints https://<something>.vercel.app
+```
+
+Open that URL on your phone or any browser. Browse the marketplace, open a listing, see its performance chart, subscribe, build a bot from a template or an AI prompt, publish it, paper-trade it — all backed by in-memory mock data that resets on refresh. Turn Demo mode **off** on the Connect tab when you want to point at a real bot-service (steps below).
+
+That's the whole thing if all you want is to try the UI. The rest of this doc is for running against a real backend.
+
+---
+
+# Real backend (mobile web + bot-service)
+
+A live URL backed by real data needs **two** deploys: the mobile web bundle (static SPA) and the bot-service API (Rust container with persistent volume for sqlite). The Trade tab also needs the trading-server's WebSocket, but the BUILD / MARKET / SUBS flows work standalone with just the bot-service.
 
 There are two paths:
 

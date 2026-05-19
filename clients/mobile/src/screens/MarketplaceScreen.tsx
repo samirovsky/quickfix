@@ -35,8 +35,8 @@ export const MarketplaceScreen: React.FC = () => {
 
   // Re-configure the REST client whenever the URL or key changes.
   useEffect(() => {
-    configure(values.botServiceUrl, values.botServiceKey);
-  }, [values.botServiceUrl, values.botServiceKey, configure]);
+    configure({ demoMode: values.demoMode, baseUrl: values.botServiceUrl, apiKey: values.botServiceKey });
+  }, [values.demoMode, values.botServiceUrl, values.botServiceKey, configure]);
 
   // Initial load once the client exists.
   useEffect(() => {

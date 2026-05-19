@@ -113,7 +113,7 @@ export class BotServiceError extends Error {
   }
 }
 
-export class BotServiceClient {
+export class BotServiceClient implements BotService {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string
@@ -267,4 +267,43 @@ export interface AiGenerateResponse {
   asset_filter: AssetFilter;
   source_template_id: string;
   stub: boolean;
+}
+
+/// The surface both the real HTTP client and the in-memory demo mock
+/// implement. Stores depend on this interface, not the concrete class,
+/// so swapping in the mock is a one-line change in `configure`.
+export interface BotService {
+  listMarketplace(): Promise<Listing[]>;
+  getListing(id: string): Promise<Listing>;
+  listingPerformance(id: string, days?: number): Promise<PerformanceMetrics>;
+  subscribe(listingId: string, allocatedCapitalCents: number): Promise<Subscription>;
+  cancelSubscription(subId: string): Promise<void>;
+  mySubscriptions(): Promise<Subscription[]>;
+  listTemplates(): Promise<TemplateSummary[]>;
+  getTemplate(id: string): Promise<Template>;
+  listMyBots(status?: BotStatus): Promise<BotConfigSummary[]>;
+  getMyBot(id: string): Promise<BotConfig>;
+  createFromTemplate(templateId: string, name: string, description?: string): Promise<BotConfig>;
+  createBot(payload: {
+    name: string;
+    description?: string;
+    strategy: Strategy;
+    asset_filter: AssetFilter;
+    source?: string;
+  }): Promise<BotConfig>;
+  updateBot(
+    id: string,
+    patch: { name?: string; description?: string; strategy?: Strategy; asset_filter?: AssetFilter }
+  ): Promise<BotConfig>;
+  deleteBot(id: string): Promise<void>;
+  setBotStatus(id: string, status: BotStatus): Promise<BotConfig>;
+  publishBot(
+    id: string,
+    title: string,
+    summary: string,
+    monthlyPriceCents: number
+  ): Promise<Listing>;
+  unpublishListing(listingId: string): Promise<void>;
+  botPerformance(id: string, days?: number): Promise<PerformanceMetrics>;
+  generateStrategy(prompt: string): Promise<AiGenerateResponse>;
 }

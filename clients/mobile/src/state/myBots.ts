@@ -4,16 +4,18 @@ import {
   AssetFilter,
   BotConfig,
   BotConfigSummary,
+  BotService,
   BotServiceClient,
   BotStatus,
   PerformanceMetrics,
   Strategy,
   TemplateSummary,
 } from '../bots/api';
+import { getSharedMock, MockBotService } from '../bots/mock';
 
 interface MyBotsStore {
-  client: BotServiceClient | null;
-  configure: (baseUrl: string, apiKey: string) => void;
+  client: BotService | null;
+  configure: (opts: { demoMode: boolean; baseUrl: string; apiKey: string }) => void;
 
   // List
   bots: BotConfigSummary[];
@@ -58,7 +60,13 @@ interface MyBotsStore {
 
 export const useMyBots = create<MyBotsStore>((set, get) => ({
   client: null,
-  configure: (baseUrl, apiKey) => {
+  configure: ({ demoMode, baseUrl, apiKey }) => {
+    if (demoMode) {
+      const existing = get().client;
+      if (existing instanceof MockBotService) return;
+      set({ client: getSharedMock() });
+      return;
+    }
     if (!baseUrl || !apiKey) {
       set({ client: null });
       return;

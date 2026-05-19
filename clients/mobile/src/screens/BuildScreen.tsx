@@ -25,8 +25,8 @@ export const BuildScreen: React.FC = () => {
   const { client, configure, bots, botsLoading, botsError, refreshBots } = useMyBots();
 
   useEffect(() => {
-    configure(values.botServiceUrl, values.botServiceKey);
-  }, [values.botServiceUrl, values.botServiceKey, configure]);
+    configure({ demoMode: values.demoMode, baseUrl: values.botServiceUrl, apiKey: values.botServiceKey });
+  }, [values.demoMode, values.botServiceUrl, values.botServiceKey, configure]);
 
   useEffect(() => {
     if (client) void refreshBots();

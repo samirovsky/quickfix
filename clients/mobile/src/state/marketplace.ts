@@ -1,15 +1,17 @@
 import { create } from 'zustand';
 
 import {
+  BotService,
   BotServiceClient,
   Listing,
   PerformanceMetrics,
   Subscription,
 } from '../bots/api';
+import { getSharedMock, MockBotService } from '../bots/mock';
 
 interface MarketplaceStore {
-  client: BotServiceClient | null;
-  configure: (baseUrl: string, apiKey: string) => void;
+  client: BotService | null;
+  configure: (opts: { demoMode: boolean; baseUrl: string; apiKey: string }) => void;
 
   listings: Listing[];
   listingsLoading: boolean;
@@ -32,7 +34,15 @@ interface MarketplaceStore {
 
 export const useMarketplace = create<MarketplaceStore>((set, get) => ({
   client: null,
-  configure: (baseUrl, apiKey) => {
+  configure: ({ demoMode, baseUrl, apiKey }) => {
+    if (demoMode) {
+      // Reuse the existing mock across reconfigures so in-session
+      // state (subscriptions, published bots) survives tab switches.
+      const existing = get().client;
+      if (existing instanceof MockBotService) return;
+      set({ client: getSharedMock() });
+      return;
+    }
     if (!baseUrl || !apiKey) {
       set({ client: null });
       return;
