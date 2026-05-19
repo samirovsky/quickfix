@@ -11,9 +11,11 @@ use bot_service::store::user_repo;
 use bot_service::{build_state, router, AppState};
 use tokio::net::TcpListener;
 
+#[allow(dead_code)] // `state` is unused in some test files; included in all spawns
 pub struct TestApp {
     pub base_url: String,
     pub api_key: String,
+    pub state: AppState,
 }
 
 pub async fn spawn() -> TestApp {
@@ -33,7 +35,7 @@ pub async fn spawn() -> TestApp {
 
     let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind");
     let addr: SocketAddr = listener.local_addr().expect("local_addr");
-    let app = router(state);
+    let app = router(state.clone());
 
     tokio::spawn(async move {
         let _ = axum::serve(listener, app).await;
@@ -44,6 +46,7 @@ pub async fn spawn() -> TestApp {
     TestApp {
         base_url: format!("http://{addr}"),
         api_key,
+        state,
     }
 }
 

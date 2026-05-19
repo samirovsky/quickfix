@@ -6,13 +6,16 @@ Runs on iOS, Android, and the web from a single codebase.
 
 ## What's in it
 
-| Screen     | Purpose                                                                                  |
-| ---------- | ---------------------------------------------------------------------------------------- |
-| Connect    | Enter the server WebSocket URL; settings are persisted to AsyncStorage; live status badge|
-| Trade      | Symbol picker · order book (own resting) · order entry · depth chart · live exec feed   |
-| Orders     | All open orders across symbols with per-order Cancel + Cancel-All                       |
-| Fills      | Realised P&amp;L per symbol, total realised, full fills history                          |
-| Settings   | Theme (system / light / dark) · session reset · settings reset                          |
+| Screen        | Purpose                                                                                  |
+| ------------- | ---------------------------------------------------------------------------------------- |
+| Connect       | WebSocket URL + bot-service URL/key, persisted to AsyncStorage, live status badge        |
+| Trade         | Symbol picker · order book (own resting) · order entry · depth chart · live exec feed   |
+| Marketplace   | Browse published bots, see creator + price + subscriber count, tap into a listing       |
+| Listing detail| Performance chart (7/30/90d), win-rate / best / worst, subscribe with allocated capital |
+| My Bots       | Active subscriptions with cancel; tap a row to revisit the listing                       |
+| Orders        | All open orders across symbols with per-order Cancel + Cancel-All                       |
+| Fills         | Realised P&amp;L per symbol, total realised, full fills history                          |
+| Settings      | Theme (system / light / dark) · session reset · settings reset                          |
 
 ## Architecture
 

@@ -11,6 +11,11 @@ export interface Settings {
   themeMode: ThemeMode;
   // Number of symbols the server is configured with (must match TRADING_SYMBOLS).
   symbolCount: number;
+  // bot-service REST endpoint (http base URL, no trailing slash needed)
+  // and the API key for X-API-Key. Both must be set before the
+  // Marketplace tab is functional.
+  botServiceUrl: string;
+  botServiceKey: string;
 }
 
 const DEFAULTS: Settings = {
@@ -18,6 +23,8 @@ const DEFAULTS: Settings = {
   defaultSymbolId: 0,
   themeMode: 'system',
   symbolCount: 64,
+  botServiceUrl: 'http://10.0.2.2:9100',
+  botServiceKey: '',
 };
 
 interface SettingsStore {

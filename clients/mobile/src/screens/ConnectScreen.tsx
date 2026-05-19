@@ -125,6 +125,47 @@ export const ConnectScreen: React.FC = () => {
             />
           </Card>
 
+          <Card title="Bot service (marketplace)">
+            <Text style={[styles.label, { color: colors.textMuted }]}>HTTP URL</Text>
+            <TextInput
+              value={values.botServiceUrl}
+              onChangeText={t => update({ botServiceUrl: t })}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              placeholder="http://10.0.2.2:9100"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
+              ]}
+            />
+            <Text style={[styles.label, { color: colors.textMuted, marginTop: 12 }]}>
+              API key
+            </Text>
+            <TextInput
+              value={values.botServiceKey}
+              onChangeText={t => update({ botServiceKey: t })}
+              autoCapitalize="none"
+              autoCorrect={false}
+              secureTextEntry
+              placeholder="X-API-Key for bot-service"
+              placeholderTextColor={colors.textMuted}
+              style={[
+                styles.input,
+                { color: colors.text, borderColor: colors.border, backgroundColor: colors.bgElevated },
+              ]}
+            />
+            <Text style={[styles.help, { color: colors.textMuted }]}>
+              Run the server with{' '}
+              <Text style={styles.mono}>BOT_SERVICE_SEED_DEMO=1</Text>{' '}
+              to get two pre-provisioned keys:{' '}
+              <Text style={styles.mono}>demo-alice-please-rotate</Text>
+              {' '}/{' '}
+              <Text style={styles.mono}>demo-bob-please-rotate</Text>.
+            </Text>
+          </Card>
+
           {conn.kind === 'error' && (
             <Card title="Last error" style={{ borderColor: colors.danger }}>
               <Text style={{ color: colors.danger }}>{conn.message}</Text>

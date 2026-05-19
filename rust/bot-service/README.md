@@ -10,31 +10,45 @@ No execution, no AI, no marketplace, no real billing yet — those are later sli
 
 ## Endpoints
 
-| Method | Path                          | Notes                                                            |
-| ------ | ----------------------------- | ---------------------------------------------------------------- |
-| GET    | `/healthz`                    | Public                                                           |
-| GET    | `/v1/templates`               | List bundled templates                                           |
-| GET    | `/v1/templates/{id}`          | Full template, including strategy                                |
-| POST   | `/v1/bots`                    | Create a bot from a full strategy payload                        |
-| POST   | `/v1/bots/from-template/{id}` | Clone a template into a new bot                                  |
-| GET    | `/v1/bots`                    | List the caller's bots                                           |
-| GET    | `/v1/bots/{id}`               | Full bot config                                                  |
-| PUT    | `/v1/bots/{id}`               | Partial update (name, description, strategy, asset filter)       |
-| DELETE | `/v1/bots/{id}`               | 204 on success                                                   |
-| POST   | `/v1/bots/{id}/status`        | Transition between `draft` / `paper` / `paused` / `stopped`. Refuses `live` in v1. |
-| GET    | `/v1/billing/usage`           | Stubbed totals from `billing_events` (zero in v1)               |
-| POST   | `/v1/billing/estimate`        | Fee estimate by trades/month + asset class                       |
+| Method | Path                                          | Notes                                                            |
+| ------ | --------------------------------------------- | ---------------------------------------------------------------- |
+| GET    | `/healthz`                                    | Public                                                           |
+| GET    | `/v1/templates`                               | List bundled templates                                           |
+| GET    | `/v1/templates/{id}`                          | Full template, including strategy                                |
+| POST   | `/v1/bots`                                    | Create a bot from a full strategy payload                        |
+| POST   | `/v1/bots/from-template/{id}`                 | Clone a template into a new bot                                  |
+| GET    | `/v1/bots`                                    | List the caller's bots                                           |
+| GET    | `/v1/bots/{id}`                               | Full bot config                                                  |
+| PUT    | `/v1/bots/{id}`                               | Partial update (name, description, strategy, asset filter)       |
+| DELETE | `/v1/bots/{id}`                               | 204 on success                                                   |
+| POST   | `/v1/bots/{id}/status`                        | Transition between `draft` / `paper` / `paused` / `stopped`. Refuses `live` in v1. |
+| POST   | `/v1/bots/{id}/publish`                       | Publish your bot to the marketplace                              |
+| GET    | `/v1/bots/{id}/performance?days=N`            | Owner-only performance metrics from `bot_trades`                 |
+| GET    | `/v1/marketplace/listings`                    | Browse all published listings (any authed user)                  |
+| GET    | `/v1/marketplace/listings/{id}`               | Single listing with creator + subscriber count                   |
+| POST   | `/v1/marketplace/listings/{id}/unpublish`     | Creator-only — flips status to `unpublished`                     |
+| POST   | `/v1/marketplace/listings/{id}/subscribe`     | Subscribe with allocated capital                                 |
+| GET    | `/v1/marketplace/listings/{id}/performance?days=N` | Performance metrics for the listed bot                       |
+| POST   | `/v1/subscriptions/{id}/cancel`               | Cancel one of your subscriptions                                 |
+| GET    | `/v1/me/subscriptions`                        | All active subscriptions with their listings                     |
+| GET    | `/v1/billing/usage`                           | Stubbed totals from `billing_events` (zero in v1)               |
+| POST   | `/v1/billing/estimate`                        | Fee estimate by trades/month + asset class                       |
 
 Errors are JSON `{ "error": "...", "code": "..." }`.
 
 ## Configuration
 
-| Env var               | Default                       | Purpose                                                              |
-| --------------------- | ----------------------------- | -------------------------------------------------------------------- |
-| `BOT_SERVICE_BIND`    | `127.0.0.1:9100`              | Listen address.                                                       |
-| `BOT_SERVICE_DB`      | `sqlite://bot-service.sqlite` | sqlx URL. Use `sqlite::memory:` for ephemeral local dev.              |
-| `BOT_SERVICE_KEYS`    | _none_                        | Optional path to a JSON file of `[{ "name", "api_key" }, ...]`. Seeded on startup. Local-dev convenience only — keys are stored as sha-256 hashes so a real admin tool will replace this. |
-| `RUST_LOG`            | `info`                        | `tracing` filter.                                                    |
+| Env var                  | Default                       | Purpose                                                              |
+| ------------------------ | ----------------------------- | -------------------------------------------------------------------- |
+| `BOT_SERVICE_BIND`       | `127.0.0.1:9100`              | Listen address.                                                       |
+| `BOT_SERVICE_DB`         | `sqlite://bot-service.sqlite` | sqlx URL. Use `sqlite::memory:` for ephemeral local dev.              |
+| `BOT_SERVICE_KEYS`       | _none_                        | Optional path to a JSON file of `[{ "name", "api_key" }, ...]`. Seeded on startup. Local-dev convenience only. |
+| `BOT_SERVICE_SEED_DEMO`  | _none_                        | Set to `1` to seed two demo users (`alice` / `bob`), three published bots, and 30 days of synthetic trades. Idempotent — skips if the marketplace already has listings. |
+| `RUST_LOG`               | `info`                        | `tracing` filter.                                                    |
+
+Demo keys printed at startup when `BOT_SERVICE_SEED_DEMO=1`:
+- `demo-alice-please-rotate`
+- `demo-bob-please-rotate`
 
 ## Smoke test
 

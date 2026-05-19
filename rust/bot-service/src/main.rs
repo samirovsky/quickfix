@@ -22,6 +22,11 @@ async fn main() -> anyhow::Result<()> {
             .await
             .context("seeding api keys")?;
     }
+    if cfg.seed_demo {
+        bot_service::seed::seed_if_empty(&state)
+            .await
+            .context("seeding demo data")?;
+    }
 
     bot_service::serve(cfg.bind, state).await
 }

@@ -22,12 +22,19 @@ pub mod db;
 pub mod error;
 pub mod models;
 pub mod routes;
+pub mod seed;
 pub mod state;
 pub mod store;
 
 pub use state::AppState;
 
 const TEMPLATES_JSON: &str = include_str!("../templates/library.json");
+
+/// QFTX price scale factor: 1 USD = 1e8 ticks. The matching engine uses
+/// fixed-point i64 prices at this scale; the seeder generates demo prices
+/// in the same units so a slice-4 engine can be swapped in without
+/// rewriting the trade-recording logic.
+pub const PRICE_TICKS_PER_DOLLAR: i64 = 100_000_000;
 
 pub fn load_templates() -> Result<Vec<models::template::Template>> {
     serde_json::from_str(TEMPLATES_JSON).context("parsing bundled templates/library.json")
@@ -58,6 +65,39 @@ pub fn router(state: AppState) -> Router {
                 .delete(routes::bots::delete),
         )
         .route("/v1/bots/:id/status", post(routes::bots::set_status))
+        .route("/v1/bots/:id/publish", post(routes::marketplace::publish))
+        .route(
+            "/v1/bots/:id/performance",
+            get(routes::marketplace::bot_performance),
+        )
+        .route(
+            "/v1/marketplace/listings",
+            get(routes::marketplace::list_listings),
+        )
+        .route(
+            "/v1/marketplace/listings/:id",
+            get(routes::marketplace::get_listing),
+        )
+        .route(
+            "/v1/marketplace/listings/:id/unpublish",
+            post(routes::marketplace::unpublish),
+        )
+        .route(
+            "/v1/marketplace/listings/:id/subscribe",
+            post(routes::marketplace::subscribe),
+        )
+        .route(
+            "/v1/marketplace/listings/:id/performance",
+            get(routes::marketplace::listing_performance),
+        )
+        .route(
+            "/v1/subscriptions/:id/cancel",
+            post(routes::marketplace::cancel_subscription),
+        )
+        .route(
+            "/v1/me/subscriptions",
+            get(routes::marketplace::my_subscriptions),
+        )
         .route("/v1/billing/usage", get(routes::billing::usage))
         .route("/v1/billing/estimate", post(routes::billing::estimate))
         .route_layer(middleware::from_fn_with_state(

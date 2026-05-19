@@ -10,6 +10,7 @@ pub struct ServiceConfig {
     pub bind: SocketAddr,
     pub database_url: String,
     pub seed_keys_path: Option<String>,
+    pub seed_demo: bool,
 }
 
 impl ServiceConfig {
@@ -21,10 +22,14 @@ impl ServiceConfig {
         let database_url =
             env::var("BOT_SERVICE_DB").unwrap_or_else(|_| "sqlite://bot-service.sqlite".into());
         let seed_keys_path = env::var("BOT_SERVICE_KEYS").ok().filter(|s| !s.is_empty());
+        let seed_demo = env::var("BOT_SERVICE_SEED_DEMO")
+            .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
         Self {
             bind,
             database_url,
             seed_keys_path,
+            seed_demo,
         }
     }
 }
