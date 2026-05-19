@@ -1,0 +1,6 @@
+target/
+Cargo.lock
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+dev-keys.json

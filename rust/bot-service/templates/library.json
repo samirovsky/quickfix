@@ -1,0 +1,207 @@
+[
+  {
+    "id": "tpl_rsi_oversold",
+    "name": "RSI Oversold Bounce",
+    "category": "MeanReversion",
+    "description": "Buys when RSI(14) on the 1h chart drops below 30. Exits on a 2% take-profit or a 1% stop-loss.",
+    "risk_level": 3,
+    "asset_filter": { "symbols": [0], "market": "qftx" },
+    "strategy": {
+      "version": 1,
+      "entry": {
+        "all_of": [
+          {
+            "type": "indicator_threshold",
+            "indicator": "rsi",
+            "params": { "period": 14, "timeframe": "1h" },
+            "op": "lt",
+            "value": 30.0
+          }
+        ]
+      },
+      "exit": {
+        "any_of": [
+          { "type": "take_profit_pct", "value": 2.0 },
+          { "type": "stop_loss_pct", "value": 1.0 }
+        ]
+      },
+      "position_sizing": {
+        "kind": "percent_portfolio",
+        "value": 5.0,
+        "max_notional_cents": 100000
+      },
+      "risk": {
+        "max_concurrent": 3,
+        "max_daily_loss_cents": 5000,
+        "halt_after_n_losses": 4
+      },
+      "schedule": {
+        "active_hours_utc": [[13, 21]],
+        "active_days": ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      }
+    }
+  },
+  {
+    "id": "tpl_ema_cross",
+    "name": "EMA 12/26 Crossover",
+    "category": "TrendFollowing",
+    "description": "Buys when EMA(12) crosses above EMA(26) on the 1h chart. Trailing stop at 0.5%.",
+    "risk_level": 3,
+    "asset_filter": { "symbols": [0], "market": "qftx" },
+    "strategy": {
+      "version": 1,
+      "entry": {
+        "all_of": [
+          {
+            "type": "indicator_threshold",
+            "indicator": "ema_cross",
+            "params": { "fast": 12, "slow": 26, "timeframe": "1h" },
+            "op": "gt",
+            "value": 0.0
+          }
+        ]
+      },
+      "exit": {
+        "any_of": [
+          { "type": "trailing_stop_pct", "value": 0.5 },
+          { "type": "stop_loss_pct", "value": 2.0 }
+        ]
+      },
+      "position_sizing": {
+        "kind": "percent_portfolio",
+        "value": 10.0,
+        "max_notional_cents": 250000
+      },
+      "risk": {
+        "max_concurrent": 2,
+        "max_daily_loss_cents": 10000,
+        "halt_after_n_losses": 3
+      },
+      "schedule": {
+        "active_hours_utc": [[0, 24]],
+        "active_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      }
+    }
+  },
+  {
+    "id": "tpl_breakout_box",
+    "name": "20-bar Breakout",
+    "category": "Breakout",
+    "description": "Buys on a 20-bar high breakout with ATR-scaled stops. Best on high-volatility instruments.",
+    "risk_level": 4,
+    "asset_filter": { "symbols": [0], "market": "qftx" },
+    "strategy": {
+      "version": 1,
+      "entry": {
+        "all_of": [
+          {
+            "type": "indicator_threshold",
+            "indicator": "donchian_upper_break",
+            "params": { "period": 20, "timeframe": "15m" },
+            "op": "gt",
+            "value": 0.0
+          }
+        ]
+      },
+      "exit": {
+        "any_of": [
+          { "type": "take_profit_pct", "value": 4.0 },
+          { "type": "stop_loss_pct", "value": 2.0 }
+        ]
+      },
+      "position_sizing": {
+        "kind": "fixed_amount",
+        "value_cents": 50000
+      },
+      "risk": {
+        "max_concurrent": 1,
+        "max_daily_loss_cents": 5000,
+        "halt_after_n_losses": 2
+      },
+      "schedule": {
+        "active_hours_utc": [[13, 21]],
+        "active_days": ["Mon", "Tue", "Wed", "Thu", "Fri"]
+      }
+    }
+  },
+  {
+    "id": "tpl_grid",
+    "name": "Symmetric Grid",
+    "category": "Grid",
+    "description": "Lays a fixed-step grid of buys below mid and sells above mid. Best in ranging markets.",
+    "risk_level": 4,
+    "asset_filter": { "symbols": [0], "market": "qftx" },
+    "strategy": {
+      "version": 1,
+      "entry": {
+        "all_of": [
+          {
+            "type": "indicator_threshold",
+            "indicator": "grid_distance_pct",
+            "params": { "step_pct": 0.25, "levels": 6 },
+            "op": "gte",
+            "value": 0.25
+          }
+        ]
+      },
+      "exit": {
+        "any_of": [
+          { "type": "take_profit_pct", "value": 0.5 },
+          { "type": "stop_loss_pct", "value": 5.0 }
+        ]
+      },
+      "position_sizing": {
+        "kind": "percent_portfolio",
+        "value": 2.0,
+        "max_notional_cents": 50000
+      },
+      "risk": {
+        "max_concurrent": 12,
+        "max_daily_loss_cents": 8000,
+        "halt_after_n_losses": 6
+      },
+      "schedule": {
+        "active_hours_utc": [[0, 24]],
+        "active_days": ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+      }
+    }
+  },
+  {
+    "id": "tpl_dca_weekly",
+    "name": "Weekly DCA",
+    "category": "DCA",
+    "description": "Buys a fixed notional every Monday at 14:00 UTC. No stop-loss — accumulates regardless of price.",
+    "risk_level": 2,
+    "asset_filter": { "symbols": [0], "market": "qftx" },
+    "strategy": {
+      "version": 1,
+      "entry": {
+        "all_of": [
+          {
+            "type": "indicator_threshold",
+            "indicator": "schedule_tick",
+            "params": { "cron": "0 14 * * 1" },
+            "op": "eq",
+            "value": 1.0
+          }
+        ]
+      },
+      "exit": {
+        "any_of": []
+      },
+      "position_sizing": {
+        "kind": "fixed_amount",
+        "value_cents": 10000
+      },
+      "risk": {
+        "max_concurrent": 1,
+        "max_daily_loss_cents": 100000,
+        "halt_after_n_losses": 999
+      },
+      "schedule": {
+        "active_hours_utc": [[14, 15]],
+        "active_days": ["Mon"]
+      }
+    }
+  }
+]
