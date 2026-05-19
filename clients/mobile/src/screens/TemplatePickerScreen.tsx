@@ -11,9 +11,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 
-import { TemplateSummary } from '../bots/api';
+import { AiGenerateResponse, TemplateSummary } from '../bots/api';
 import { Card } from '../components/Card';
 import { useMyBots } from '../state/myBots';
+import { useSettings } from '../state/settings';
 import { useTheme } from '../theme/ThemeProvider';
 
 export const TemplatePickerScreen: React.FC = () => {
@@ -22,11 +23,26 @@ export const TemplatePickerScreen: React.FC = () => {
     replace: (screen: string, params?: object) => void;
   }>();
   const { colors } = useTheme();
-  const { client, templates, refreshTemplates, createFromTemplate } = useMyBots();
+  const { values } = useSettings();
+  const { client, configure, templates, refreshTemplates, createFromTemplate, createFromStrategy } =
+    useMyBots();
+
+  // Re-configure if the user just edited the URL/key — same pattern as
+  // the other tabs.
+  useEffect(() => {
+    configure(values.botServiceUrl, values.botServiceKey);
+  }, [values.botServiceUrl, values.botServiceKey, configure]);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [creating, setCreating] = useState(false);
+
+  // AI-prompt state — held separate from the template-selection state so
+  // the two flows don't fight over `selected`.
+  const [prompt, setPrompt] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [aiResult, setAiResult] = useState<AiGenerateResponse | null>(null);
+  const [aiName, setAiName] = useState('');
 
   useEffect(() => {
     if (client && templates.length === 0) void refreshTemplates();
@@ -46,11 +62,54 @@ export const TemplatePickerScreen: React.FC = () => {
     }
   };
 
+  const onGenerate = async () => {
+    if (!client || !prompt.trim()) return;
+    setGenerating(true);
+    try {
+      const result = await client.generateStrategy(prompt.trim());
+      setAiResult(result);
+      // Seed the name based on the matched template; user can edit.
+      const tpl = templates.find(t => t.id === result.source_template_id);
+      setAiName(tpl ? `${tpl.name} (from prompt)` : 'AI-generated bot');
+    } catch (e) {
+      Alert.alert('Generate failed', (e as Error).message);
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  const onSaveAi = async () => {
+    if (!aiResult || !aiName.trim()) return;
+    setCreating(true);
+    try {
+      const bot = await createFromStrategy({
+        name: aiName.trim(),
+        description: `Generated from prompt: ${prompt.trim().slice(0, 200)}`,
+        strategy: aiResult.strategy,
+        asset_filter: aiResult.asset_filter,
+        source: 'ai',
+      });
+      if (bot) {
+        navigation.replace('MyBotDetail', { botId: bot.id });
+      }
+    } catch (e) {
+      Alert.alert('Create failed', (e as Error).message);
+      setCreating(false);
+    }
+  };
+
+  const matchedTemplate = aiResult
+    ? templates.find(t => t.id === aiResult.source_template_id) ?? null
+    : null;
+
   const renderTemplate = ({ item }: { item: TemplateSummary }) => {
     const isActive = item.id === selected;
     return (
       <Pressable
-        onPress={() => setSelected(item.id)}
+        onPress={() => {
+          setSelected(item.id);
+          setAiResult(null);
+        }}
         style={[
           styles.tpl,
           {
@@ -94,6 +153,92 @@ export const TemplatePickerScreen: React.FC = () => {
         keyExtractor={t => t.id}
         renderItem={renderTemplate}
         contentContainerStyle={styles.list}
+        ListHeaderComponent={
+          <Card title="Generate with AI (preview)">
+            <Text style={[styles.aiHint, { color: colors.textMuted }]}>
+              Describe the strategy in plain English. The current build uses a stub that
+              matches your prompt to a bundled template — a real LLM-backed generator
+              will replace it without changing this UI.
+            </Text>
+            <TextInput
+              value={prompt}
+              onChangeText={setPrompt}
+              placeholder="e.g. Buy bitcoin when RSI drops below 30"
+              placeholderTextColor={colors.textMuted}
+              multiline
+              style={[
+                styles.input,
+                styles.inputMulti,
+                {
+                  color: colors.text,
+                  borderColor: colors.border,
+                  backgroundColor: colors.bgElevated,
+                },
+              ]}
+            />
+            <Pressable
+              disabled={!prompt.trim() || generating || !client}
+              onPress={onGenerate}
+              style={({ pressed }) => [
+                styles.cta,
+                {
+                  backgroundColor: colors.primary,
+                  opacity: !prompt.trim() || generating || !client ? 0.4 : pressed ? 0.9 : 1,
+                },
+              ]}
+            >
+              <Text style={{ color: colors.primaryFg, fontWeight: '700' }}>
+                {generating ? 'GENERATING…' : 'GENERATE'}
+              </Text>
+            </Pressable>
+
+            {aiResult && (
+              <View style={[styles.aiResult, { borderColor: colors.border, backgroundColor: colors.bgElevated }]}>
+                <Text style={[styles.aiResultLabel, { color: colors.textMuted }]}>
+                  GENERATED STRATEGY
+                </Text>
+                <Text style={[styles.aiResultBody, { color: colors.text }]}>
+                  Closest match: {matchedTemplate?.name ?? aiResult.source_template_id}
+                </Text>
+                {aiResult.stub && (
+                  <Text style={[styles.aiStubBadge, { color: colors.warn }]}>
+                    Stubbed — real AI generation lands in a follow-up slice.
+                  </Text>
+                )}
+                <Text style={[styles.aiHint, { color: colors.textMuted, marginTop: 10 }]}>
+                  Name your bot:
+                </Text>
+                <TextInput
+                  value={aiName}
+                  onChangeText={setAiName}
+                  style={[
+                    styles.input,
+                    {
+                      color: colors.text,
+                      borderColor: colors.border,
+                      backgroundColor: colors.surface,
+                    },
+                  ]}
+                />
+                <Pressable
+                  disabled={!aiName.trim() || creating}
+                  onPress={onSaveAi}
+                  style={({ pressed }) => [
+                    styles.cta,
+                    {
+                      backgroundColor: colors.primary,
+                      opacity: !aiName.trim() || creating ? 0.4 : pressed ? 0.9 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={{ color: colors.primaryFg, fontWeight: '700' }}>
+                    {creating ? 'CREATING…' : 'SAVE AS MY BOT'}
+                  </Text>
+                </Pressable>
+              </View>
+            )}
+          </Card>
+        }
         ListEmptyComponent={
           <Card title="Templates">
             <Text style={{ color: colors.textMuted }}>
@@ -182,6 +327,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     fontSize: 15,
   },
+  inputMulti: { minHeight: 64, textAlignVertical: 'top' },
   cta: {
     marginTop: 12,
     paddingVertical: 14,
@@ -189,4 +335,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   hint: { marginTop: 8, fontSize: 11, lineHeight: 16 },
+  aiHint: { fontSize: 12, marginBottom: 10, lineHeight: 18 },
+  aiResult: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 10,
+    borderWidth: StyleSheet.hairlineWidth,
+  },
+  aiResultLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  aiResultBody: { fontSize: 14, marginTop: 4, fontWeight: '600' },
+  aiStubBadge: { fontSize: 11, marginTop: 4 },
 });

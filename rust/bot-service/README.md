@@ -33,6 +33,7 @@ No execution, no AI, no marketplace, no real billing yet — those are later sli
 | GET    | `/v1/me/subscriptions`                        | All active subscriptions with their listings                     |
 | GET    | `/v1/billing/usage`                           | Stubbed totals from `billing_events` (zero in v1)               |
 | POST   | `/v1/billing/estimate`                        | Fee estimate by trades/month + asset class                       |
+| POST   | `/v1/ai/generate-strategy`                    | **Stubbed.** Takes `{prompt}`, returns a `Strategy` derived from a keyword match against the bundled templates. Wire shape is what a real LLM impl will return — `stub: true` until that lands. |
 
 Errors are JSON `{ "error": "...", "code": "..." }`.
 

@@ -147,6 +147,7 @@ pub fn router_with_cors(state: AppState, cors: Option<CorsLayer>) -> Router {
         )
         .route("/v1/billing/usage", get(routes::billing::usage))
         .route("/v1/billing/estimate", post(routes::billing::estimate))
+        .route("/v1/ai/generate-strategy", post(routes::ai::generate))
         .route_layer(middleware::from_fn_with_state(
             state.clone(),
             auth::require_api_key,

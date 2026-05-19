@@ -159,6 +159,49 @@ async fn rejects_invalid_strategy_at_write_time() {
 }
 
 #[tokio::test]
+async fn ai_generate_strategy_stub_matches_keywords_and_falls_back() {
+    let app = spawn().await;
+    let c = client();
+    let send = |prompt: &'static str| {
+        let url = format!("{}/v1/ai/generate-strategy", app.base_url);
+        let key = app.api_key.clone();
+        let c = c.clone();
+        async move {
+            c.post(&url)
+                .header("X-API-Key", &key)
+                .json(&json!({ "prompt": prompt }))
+                .send()
+                .await
+                .unwrap()
+                .json::<Value>()
+                .await
+                .unwrap()
+        }
+    };
+
+    let rsi = send("buy when RSI dips below 30").await;
+    assert_eq!(rsi["source_template_id"], "tpl_rsi_oversold");
+    assert_eq!(rsi["stub"], true);
+    assert!(rsi["strategy"].is_object());
+
+    let breakout = send("Donchian breakout please").await;
+    assert_eq!(breakout["source_template_id"], "tpl_breakout_box");
+
+    let dca = send("dollar cost average bitcoin").await;
+    assert_eq!(dca["source_template_id"], "tpl_dca_weekly");
+
+    // Empty prompt → 400.
+    let bad = c
+        .post(format!("{}/v1/ai/generate-strategy", app.base_url))
+        .header("X-API-Key", &app.api_key)
+        .json(&json!({ "prompt": "" }))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad.status(), 400);
+}
+
+#[tokio::test]
 async fn billing_estimate_returns_expected_shape() {
     let app = spawn().await;
     let c = client();

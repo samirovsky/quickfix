@@ -1,3 +1,4 @@
+pub mod ai;
 pub mod billing;
 pub mod bots;
 pub mod health;

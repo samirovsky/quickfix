@@ -203,6 +203,16 @@ export class BotServiceClient {
     });
   }
 
+  createBot(payload: {
+    name: string;
+    description?: string;
+    strategy: Strategy;
+    asset_filter: AssetFilter;
+    source?: string;
+  }): Promise<BotConfig> {
+    return this.req('POST', '/v1/bots', payload);
+  }
+
   updateBot(
     id: string,
     patch: {
@@ -246,4 +256,15 @@ export class BotServiceClient {
   botPerformance(id: string, days = 30): Promise<PerformanceMetrics> {
     return this.req('GET', `/v1/bots/${encodeURIComponent(id)}/performance?days=${days}`);
   }
+
+  generateStrategy(prompt: string): Promise<AiGenerateResponse> {
+    return this.req('POST', '/v1/ai/generate-strategy', { prompt });
+  }
+}
+
+export interface AiGenerateResponse {
+  strategy: Strategy;
+  asset_filter: AssetFilter;
+  source_template_id: string;
+  stub: boolean;
 }

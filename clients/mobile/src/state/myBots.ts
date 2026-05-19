@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import {
+  AssetFilter,
   BotConfig,
   BotConfigSummary,
   BotServiceClient,
@@ -33,6 +34,13 @@ interface MyBotsStore {
 
   // Actions
   createFromTemplate: (templateId: string, name: string) => Promise<BotConfig | null>;
+  createFromStrategy: (input: {
+    name: string;
+    description?: string;
+    strategy: Strategy;
+    asset_filter: AssetFilter;
+    source?: string;
+  }) => Promise<BotConfig | null>;
   updateBot: (
     id: string,
     patch: { name?: string; description?: string; strategy?: Strategy }
@@ -109,6 +117,14 @@ export const useMyBots = create<MyBotsStore>((set, get) => ({
     const c = get().client;
     if (!c) return null;
     const bot = await c.createFromTemplate(templateId, name);
+    set(state => ({ bots: [summary(bot), ...state.bots] }));
+    return bot;
+  },
+
+  createFromStrategy: async input => {
+    const c = get().client;
+    if (!c) return null;
+    const bot = await c.createBot(input);
     set(state => ({ bots: [summary(bot), ...state.bots] }));
     return bot;
   },
