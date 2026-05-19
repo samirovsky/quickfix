@@ -1,0 +1,58 @@
+name: Deploy mobile web (Vercel)
+
+# Runs on every push that touches the mobile app, plus manual dispatch
+# from the Actions tab. The actual deploy happens on GitHub's runners
+# (not in any sandboxed Claude environment), so they CAN reach
+# api.vercel.com.
+#
+# Required repo secrets (Settings → Secrets and variables → Actions):
+#   VERCEL_TOKEN       — from https://vercel.com/account/tokens
+#   VERCEL_ORG_ID      — read from `.vercel/project.json` after `vercel link`
+#   VERCEL_PROJECT_ID  — same source
+#
+# One-time setup before the first run:
+#   cd clients/mobile
+#   npx vercel link        # connects this dir to a Vercel project
+#   # then copy the org+project ids out of .vercel/project.json into
+#   # the repo secrets
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    paths:
+      - 'clients/mobile/**'
+      - '.github/workflows/deploy-mobile.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients/mobile
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: clients/mobile/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Vercel CLI
+        run: npm install --global vercel@latest
+
+      - name: Pull Vercel project metadata
+        run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Build with Vercel
+        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
+
+      - name: Deploy to Vercel
+        run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}

@@ -1,0 +1,44 @@
+# fly.toml for the bot-service.
+#
+# Used by both `fly launch` (one-time, locally) and the
+# `.github/workflows/deploy-bot-service.yml` workflow.
+
+app = "qftx-bot-service"
+primary_region = "iad"
+
+[build]
+  dockerfile = "Dockerfile"
+  # When the build context is the repo root (the GH Actions workflow
+  # invokes flyctl from the repo root for path resolution), this
+  # dockerfile path is relative to the cwd, not this file. The workflow
+  # passes --dockerfile explicitly to match.
+
+[env]
+  BOT_SERVICE_BIND = "0.0.0.0:9100"
+  BOT_SERVICE_DB = "sqlite:///data/bot.sqlite"
+  # Seed the demo data on first boot so the marketplace isn't empty.
+  # Idempotent — skipped on subsequent boots.
+  BOT_SERVICE_SEED_DEMO = "1"
+  RUST_LOG = "info"
+
+[[mounts]]
+  source = "bot_data"
+  destination = "/data"
+
+[http_service]
+  internal_port = 9100
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/healthz"
+
+# Set the CORS allowlist as a secret rather than committing it here so
+# the Vercel domain stays out of the repo:
+#   fly secrets set BOT_SERVICE_CORS_ORIGINS=https://<your-app>.vercel.app

@@ -1,0 +1,46 @@
+name: Deploy bot-service (Fly.io)
+
+# Build + deploy the bot-service container to Fly. Same deal as the
+# Vercel workflow: this runs on GitHub's infrastructure, so the
+# api.fly.io egress that's blocked from sandboxes works here.
+#
+# Required repo secret:
+#   FLY_API_TOKEN — `fly tokens create deploy -a qftx-bot-service`
+#
+# One-time setup before the first run:
+#   cd rust/bot-service
+#   fly launch --no-deploy --copy-config --dockerfile Dockerfile \
+#              --name qftx-bot-service
+#   fly volumes create bot_data --size 1 --region <your-region>
+#   fly secrets set \
+#       BOT_SERVICE_SEED_DEMO=1 \
+#       BOT_SERVICE_CORS_ORIGINS=https://<your-vercel-domain>.vercel.app
+#
+# After that, every push to the matching branches deploys.
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - 'claude/**'
+    paths:
+      - 'rust/bot-service/**'
+      - '.github/workflows/deploy-bot-service.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: rust/bot-service
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+
+      - name: Deploy to Fly.io
+        run: flyctl deploy --remote-only
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}

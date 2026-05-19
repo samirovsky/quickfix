@@ -1,12 +1,11 @@
 # bot-service container image.
 #
-# Two-stage build: a debian-slim Rust toolchain compiles a release
-# binary, then a thin debian-slim runtime copies just the binary and the
-# templates JSON. sqlite is bundled (libsqlite3-sys vendors it via the
-# `sqlite` feature on sqlx).
+# Build context is the **crate directory**, not the repo root:
+#   docker build -t bot-service rust/bot-service
+# That's also what `flyctl deploy` uses with the fly.toml in this dir,
+# so local builds and the GH Actions deploy stay in sync.
 #
-# Usage:
-#   docker build -t bot-service -f rust/bot-service/Dockerfile .
+# Run locally:
 #   docker run --rm -p 9100:9100 \
 #       -v $(pwd)/data:/data \
 #       -e BOT_SERVICE_BIND=0.0.0.0:9100 \
@@ -18,28 +17,30 @@
 FROM rust:1.83-slim-bookworm AS builder
 WORKDIR /work
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        ca-certificates pkg-config libssl-dev \
+        ca-certificates pkg-config libssl-dev protobuf-compiler \
     && rm -rf /var/lib/apt/lists/*
 
-# Cache dependencies first.
-COPY rust/bot-service/Cargo.toml rust/bot-service/Cargo.toml
-COPY rust/bot-service/Cargo.lock* rust/bot-service/
-RUN mkdir -p rust/bot-service/src && echo 'fn main(){}' > rust/bot-service/src/main.rs
-RUN cd rust/bot-service && cargo fetch
+# Cache dependencies first. Copy the manifest, build a dummy main, fetch,
+# then copy the rest. Sources change far more often than Cargo.toml.
+COPY Cargo.toml ./
+COPY Cargo.lock* ./
+RUN mkdir -p src && echo 'fn main(){}' > src/main.rs && cargo fetch
 
-# Real sources.
-COPY rust/bot-service rust/bot-service
-RUN cd rust/bot-service && cargo build --release --bin bot-service
+# Real sources. build.rs needs proto/ to exist, so copy that before the
+# blanket `.` copy in case the cache is hot for everything else.
+COPY proto ./proto
+COPY build.rs ./
+COPY src ./src
+COPY templates ./templates
+COPY migrations ./migrations
+RUN cargo build --release --bin bot-service
 
 FROM debian:bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends \
         ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /work/rust/bot-service/target/release/bot-service /usr/local/bin/bot-service
-
-# Templates are baked in via include_str! at compile time, so we don't
-# need to copy templates/library.json into the runtime image.
+COPY --from=builder /work/target/release/bot-service /usr/local/bin/bot-service
 
 ENV BOT_SERVICE_BIND=0.0.0.0:9100 \
     BOT_SERVICE_DB=sqlite:///data/bot.sqlite \

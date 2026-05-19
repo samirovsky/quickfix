@@ -2,11 +2,60 @@
 
 A working live URL needs **two** deploys: the mobile web bundle (static SPA) and the bot-service API (Rust container with persistent volume for sqlite). The Trade tab also needs the trading-server's WebSocket, but the BUILD / MARKET / SUBS flows work standalone with just the bot-service.
 
-The repository is shaped so each half can be deployed independently. Everything below runs from your laptop; I cannot deploy from the sandbox this repository is being developed in (its egress proxy blocks `vercel.com`, `fly.io`, `render.com`, etc. with `host_not_allowed`).
+There are two paths:
+
+* **[GitHub Actions](#0-github-actions-push-to-deploy)** — once configured (a few secrets in the repo settings), every push deploys both halves. Best for ongoing development.
+* **CLI (one-shot)** — `vercel deploy --prod` and `fly deploy` from your laptop. Best the very first time, when you need to create the Vercel project and Fly app interactively.
+
+Either way, the actual deploy happens off-sandbox: GitHub Actions runs on GitHub's own runners; the CLI runs on your laptop. The Claude sandbox this repository is developed in cannot reach `api.vercel.com` / `api.fly.io` (`host_not_allowed`), which is why nothing in this repo deploys itself.
 
 ---
 
-## 1. Mobile web → Vercel
+## 0. GitHub Actions: push to deploy
+
+Two workflow files are committed at `.github/workflows/`:
+
+* `deploy-mobile.yml` — deploys `clients/mobile/` to Vercel
+* `deploy-bot-service.yml` — deploys `rust/bot-service/` to Fly.io
+
+Each triggers on push to `main` / `master` / `claude/**` when its respective directory changes, and can also be manually run from the Actions tab.
+
+### One-time setup
+
+1. **Create the Vercel project locally and capture its ids:**
+
+   ```bash
+   cd clients/mobile
+   npx vercel link            # answers: scope + project name; creates .vercel/project.json
+   cat .vercel/project.json   # copy the orgId and projectId
+   ```
+
+2. **Generate a Vercel token:** <https://vercel.com/account/tokens>.
+
+3. **Create the Fly app + volume locally and a deploy token:**
+
+   ```bash
+   cd rust/bot-service
+   fly launch --no-deploy --copy-config --name qftx-bot-service
+   fly volumes create bot_data --size 1 --region <your-region>
+   fly secrets set BOT_SERVICE_CORS_ORIGINS=https://<vercel-domain>.vercel.app
+   fly tokens create deploy -a qftx-bot-service   # copy this token
+   ```
+
+4. **Add the four repo secrets** at GitHub → Settings → Secrets and variables → Actions:
+
+   | Name                 | Value                                            |
+   | -------------------- | ------------------------------------------------ |
+   | `VERCEL_TOKEN`       | From step 2                                      |
+   | `VERCEL_ORG_ID`      | `.vercel/project.json → orgId`                   |
+   | `VERCEL_PROJECT_ID`  | `.vercel/project.json → projectId`               |
+   | `FLY_API_TOKEN`      | From step 3                                      |
+
+5. Push (or trigger the workflow manually). Both halves deploy. From then on, every push that touches the relevant folder deploys it.
+
+---
+
+## 1. CLI: mobile web → Vercel
 
 The web export of QFTX Trader is a static SPA — Vercel serves it as plain static files. There are two paths.
 
@@ -39,26 +88,23 @@ App exported to: dist
 
 ---
 
-## 2. bot-service → Fly.io / Render / your own host
+## 2. CLI: bot-service → Fly.io
 
-The bot-service is shipped with a multi-stage `Dockerfile` and reads everything from env vars. Pick whichever host fits.
-
-### Fly.io (recommended — has free persistent volumes)
+`rust/bot-service/fly.toml` is committed with sensible defaults (volume mount at `/data`, healthcheck on `/healthz`, demo seed enabled, app name `qftx-bot-service`). The repo also has a `Dockerfile` next to it that uses the crate directory as build context.
 
 ```bash
-fly launch --no-deploy --copy-config --dockerfile rust/bot-service/Dockerfile \
-           --name qftx-bot-service
+cd rust/bot-service
+fly launch --no-deploy --copy-config --name qftx-bot-service
 fly volumes create bot_data --size 1 --region <region>
-fly secrets set \
-   BOT_SERVICE_SEED_DEMO=1 \
-   BOT_SERVICE_CORS_ORIGINS=https://<your-vercel-domain>.vercel.app
-# Edit fly.toml to mount the volume at /data — see Fly's docs.
+fly secrets set BOT_SERVICE_CORS_ORIGINS=https://<your-vercel-domain>.vercel.app
 fly deploy
 ```
 
-### Render
+You get an `https://qftx-bot-service.fly.dev` URL. Test it: `curl https://qftx-bot-service.fly.dev/healthz` → `{"status":"ok"}`.
 
-Create a Web Service from the GitHub repo, Dockerfile path `rust/bot-service/Dockerfile`, set the env vars listed below. Add a disk mounted at `/data` (1 GB is plenty).
+### Render (alternative)
+
+Create a Web Service from the GitHub repo, set the Root Directory to `rust/bot-service`, Dockerfile path `Dockerfile`, configure the env vars listed below. Add a disk mounted at `/data` (1 GB).
 
 ### Required env vars
 
@@ -74,7 +120,7 @@ Create a Web Service from the GitHub repo, Dockerfile path `rust/bot-service/Doc
 ### Build verification (local)
 
 ```bash
-docker build -t bot-service -f rust/bot-service/Dockerfile .
+docker build -t bot-service rust/bot-service
 docker run --rm -p 9100:9100 \
   -e BOT_SERVICE_BIND=0.0.0.0:9100 \
   -e BOT_SERVICE_DB=sqlite:///tmp/bot.sqlite \
