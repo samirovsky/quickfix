@@ -6,33 +6,44 @@ import { NavigationContainer, DefaultTheme, DarkTheme } from '@react-navigation/
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
+import { BuildScreen } from './src/screens/BuildScreen';
 import { ConnectScreen } from './src/screens/ConnectScreen';
 import { FillsScreen } from './src/screens/FillsScreen';
 import { ListingDetailScreen } from './src/screens/ListingDetailScreen';
 import { MarketplaceScreen } from './src/screens/MarketplaceScreen';
+import { MyBotDetailScreen } from './src/screens/MyBotDetailScreen';
 import { MySubscriptionsScreen } from './src/screens/MySubscriptionsScreen';
 import { OrdersScreen } from './src/screens/OrdersScreen';
 import { SettingsScreen } from './src/screens/SettingsScreen';
+import { TemplatePickerScreen } from './src/screens/TemplatePickerScreen';
 import { TradingScreen } from './src/screens/TradingScreen';
 import { useSettings } from './src/state/settings';
 import { useTrading } from './src/state/trading';
 import { ThemeProvider, useTheme } from './src/theme/ThemeProvider';
 
 const Tabs = createBottomTabNavigator();
-const MarketStack = createNativeStackNavigator();
+const StackNav = createNativeStackNavigator();
 
 const MarketplaceStack: React.FC = () => (
-  <MarketStack.Navigator screenOptions={{ headerShown: false }}>
-    <MarketStack.Screen name="MarketplaceHome" component={MarketplaceScreen} />
-    <MarketStack.Screen name="ListingDetail" component={ListingDetailScreen} />
-  </MarketStack.Navigator>
+  <StackNav.Navigator screenOptions={{ headerShown: false }}>
+    <StackNav.Screen name="MarketplaceHome" component={MarketplaceScreen} />
+    <StackNav.Screen name="ListingDetail" component={ListingDetailScreen} />
+  </StackNav.Navigator>
 );
 
 const SubsStack: React.FC = () => (
-  <MarketStack.Navigator screenOptions={{ headerShown: false }}>
-    <MarketStack.Screen name="MySubscriptions" component={MySubscriptionsScreen} />
-    <MarketStack.Screen name="ListingDetail" component={ListingDetailScreen} />
-  </MarketStack.Navigator>
+  <StackNav.Navigator screenOptions={{ headerShown: false }}>
+    <StackNav.Screen name="MySubscriptions" component={MySubscriptionsScreen} />
+    <StackNav.Screen name="ListingDetail" component={ListingDetailScreen} />
+  </StackNav.Navigator>
+);
+
+const BuildStack: React.FC = () => (
+  <StackNav.Navigator screenOptions={{ headerShown: false }}>
+    <StackNav.Screen name="BuildHome" component={BuildScreen} />
+    <StackNav.Screen name="TemplatePicker" component={TemplatePickerScreen} />
+    <StackNav.Screen name="MyBotDetail" component={MyBotDetailScreen} />
+  </StackNav.Navigator>
 );
 
 const Shell: React.FC = () => {
@@ -60,7 +71,7 @@ const Shell: React.FC = () => {
           }}
         >
           <Tabs.Screen name="Connect" component={ConnectScreen} options={{ tabBarLabel: 'CONNECT' }} />
-          <Tabs.Screen name="Trade" component={TradingScreen} options={{ tabBarLabel: 'TRADE' }} />
+          <Tabs.Screen name="Build" component={BuildStack} options={{ tabBarLabel: 'BUILD' }} />
           <Tabs.Screen
             name="Marketplace"
             component={MarketplaceStack}
@@ -69,8 +80,9 @@ const Shell: React.FC = () => {
           <Tabs.Screen
             name="Subscriptions"
             component={SubsStack}
-            options={{ tabBarLabel: 'MY BOTS' }}
+            options={{ tabBarLabel: 'SUBS' }}
           />
+          <Tabs.Screen name="Trade" component={TradingScreen} options={{ tabBarLabel: 'TRADE' }} />
           <Tabs.Screen name="Orders" component={OrdersScreen} options={{ tabBarLabel: 'ORDERS' }} />
           <Tabs.Screen name="Fills" component={FillsScreen} options={{ tabBarLabel: 'FILLS' }} />
           <Tabs.Screen name="Settings" component={SettingsScreen} options={{ tabBarLabel: 'SETTINGS' }} />

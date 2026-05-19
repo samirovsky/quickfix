@@ -41,6 +41,68 @@ export interface Subscription {
   listing: Listing;
 }
 
+// ---------- bots, templates ----------
+
+export type BotStatus = 'draft' | 'paper' | 'live' | 'paused' | 'stopped';
+
+export interface TemplateSummary {
+  id: string;
+  name: string;
+  category: string;
+  description: string;
+  risk_level: number;
+}
+
+export interface Template extends TemplateSummary {
+  asset_filter: AssetFilter;
+  strategy: Strategy;
+}
+
+export interface AssetFilter {
+  symbols: number[];
+  market: string;
+}
+
+// The strategy shape is intentionally permissive on the client — we only
+// edit a few well-known numeric fields and pass the rest through
+// verbatim. `unknown` here means "don't pretend to fully model it".
+export interface Strategy {
+  version: number;
+  entry: unknown;
+  exit: unknown;
+  position_sizing: PositionSizing;
+  risk: RiskConfig;
+  schedule: unknown;
+}
+
+export type PositionSizing =
+  | { kind: 'fixed_amount'; value_cents: number }
+  | { kind: 'percent_portfolio'; value: number; max_notional_cents: number }
+  | { kind: 'kelly'; factor: number; max_notional_cents: number };
+
+export interface RiskConfig {
+  max_concurrent: number;
+  max_daily_loss_cents: number;
+  halt_after_n_losses: number;
+}
+
+export interface BotConfigSummary {
+  id: string;
+  name: string;
+  status: BotStatus;
+  source: string;
+  published_listing_id: string | null;
+  updated_at: string;
+}
+
+export interface BotConfig extends BotConfigSummary {
+  user_id: string;
+  description: string;
+  strategy: Strategy;
+  asset_filter: AssetFilter;
+  created_at: string;
+}
+
 export class BotServiceError extends Error {
   constructor(
     public readonly status: number,
@@ -109,5 +171,79 @@ export class BotServiceClient {
 
   mySubscriptions(): Promise<Subscription[]> {
     return this.req('GET', '/v1/me/subscriptions');
+  }
+
+  // ---------- bot builder ----------
+
+  listTemplates(): Promise<TemplateSummary[]> {
+    return this.req('GET', '/v1/templates');
+  }
+
+  getTemplate(id: string): Promise<Template> {
+    return this.req('GET', `/v1/templates/${encodeURIComponent(id)}`);
+  }
+
+  listMyBots(status?: BotStatus): Promise<BotConfigSummary[]> {
+    const q = status ? `?status=${encodeURIComponent(status)}` : '';
+    return this.req('GET', `/v1/bots${q}`);
+  }
+
+  getMyBot(id: string): Promise<BotConfig> {
+    return this.req('GET', `/v1/bots/${encodeURIComponent(id)}`);
+  }
+
+  createFromTemplate(
+    templateId: string,
+    name: string,
+    description?: string
+  ): Promise<BotConfig> {
+    return this.req('POST', `/v1/bots/from-template/${encodeURIComponent(templateId)}`, {
+      name,
+      ...(description !== undefined ? { description } : {}),
+    });
+  }
+
+  updateBot(
+    id: string,
+    patch: {
+      name?: string;
+      description?: string;
+      strategy?: Strategy;
+      asset_filter?: AssetFilter;
+    }
+  ): Promise<BotConfig> {
+    return this.req('PUT', `/v1/bots/${encodeURIComponent(id)}`, patch);
+  }
+
+  deleteBot(id: string): Promise<void> {
+    return this.req('DELETE', `/v1/bots/${encodeURIComponent(id)}`);
+  }
+
+  setBotStatus(id: string, status: BotStatus): Promise<BotConfig> {
+    return this.req('POST', `/v1/bots/${encodeURIComponent(id)}/status`, { status });
+  }
+
+  publishBot(
+    id: string,
+    title: string,
+    summary: string,
+    monthlyPriceCents: number
+  ): Promise<Listing> {
+    return this.req('POST', `/v1/bots/${encodeURIComponent(id)}/publish`, {
+      title,
+      summary,
+      monthly_price_cents: monthlyPriceCents,
+    });
+  }
+
+  unpublishListing(listingId: string): Promise<void> {
+    return this.req(
+      'POST',
+      `/v1/marketplace/listings/${encodeURIComponent(listingId)}/unpublish`
+    );
+  }
+
+  botPerformance(id: string, days = 30): Promise<PerformanceMetrics> {
+    return this.req('GET', `/v1/bots/${encodeURIComponent(id)}/performance?days=${days}`);
   }
 }
