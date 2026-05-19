@@ -77,3 +77,12 @@ The dev machine needs the server reachable on the chosen network interface. If y
 ## Wire-format reference
 
 See [`../../rust/trading-server/docs/api/binary-protocol.md`](../../rust/trading-server/docs/api/binary-protocol.md) and [`websocket.md`](../../rust/trading-server/docs/api/websocket.md). The frame layouts in `src/protocol/qftx.ts` mirror those documents exactly.
+
+## Deploying the web build
+
+```bash
+npm run vercel-build       # produces dist/ — a static SPA
+npx vercel deploy --prod   # uploads dist/ and prints a *.vercel.app URL
+```
+
+See [`DEPLOY.md`](./DEPLOY.md) for the Git-integration path and the **`ws://` mixed-content gotcha** that affects any deployed HTTPS site connecting to a local trading server.

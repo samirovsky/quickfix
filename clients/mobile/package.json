@@ -9,6 +9,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
+    "build": "EXPO_OFFLINE=1 expo export --platform web --output-dir dist",
+    "vercel-build": "EXPO_OFFLINE=1 expo export --platform web --output-dir dist",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

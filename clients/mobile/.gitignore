@@ -3,6 +3,7 @@ node_modules/
 .expo-shared/
 dist/
 web-build/
+.vercel/
 *.log
 .DS_Store
 .env
