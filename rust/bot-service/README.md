@@ -45,8 +45,9 @@ Errors are JSON `{ "error": "...", "code": "..." }`.
 | `BOT_SERVICE_DB`             | `sqlite://bot-service.sqlite` | sqlx URL. Use `sqlite::memory:` for ephemeral local dev.              |
 | `BOT_SERVICE_KEYS`           | _none_                        | Optional path to a JSON file of `[{ "name", "api_key" }, ...]`. Seeded on startup. Local-dev convenience only. |
 | `BOT_SERVICE_SEED_DEMO`      | _none_                        | Set to `1` to seed two demo users (`alice` / `bob`), three published bots, and 30 days of synthetic trades. Idempotent — skips if the marketplace already has listings. |
-| `BOT_SERVICE_ENABLE_PAPER_ENGINE` | _none_                   | Set to `1` to run the in-process paper-execution engine. Iterates `status='paper'` bots every `BOT_SERVICE_PAPER_TICK_SECS` (default 30) and writes synthetic `bot_trades` rows. Not a real engine; swap with a real one when slice 5 lands. |
+| `BOT_SERVICE_ENABLE_PAPER_ENGINE` | _none_                   | Set to `1` to run the in-process paper-execution engine. Iterates `status='paper'` bots every `BOT_SERVICE_PAPER_TICK_SECS` (default 30) and writes synthetic `bot_trades` rows. Not yet a real engine; the gRPC integration is being wired in incrementally. |
 | `BOT_SERVICE_PAPER_TICK_SECS`     | `30`                     | Cadence for the paper engine.                                       |
+| `BOT_SERVICE_TRADING_GRPC_URL`    | _none_                   | When set (e.g. `http://127.0.0.1:9001`), bot-service connects to the trading-server's gRPC and subscribes to live market data. Today it just logs ticks; the next slice forwards them into the paper engine's evaluation. Disabled by default — synthetic mode. |
 | `BOT_SERVICE_CORS_ORIGINS`   | _none_                        | Comma-separated allowlist for CORS (e.g. `https://app.vercel.app`). `*` is allowed for demos but never echoes back credentials. Leave empty for same-origin (local dev). |
 | `RUST_LOG`                   | `info`                        | `tracing` filter.                                                    |
 

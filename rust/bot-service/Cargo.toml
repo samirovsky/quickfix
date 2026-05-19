@@ -29,6 +29,8 @@ sqlx = { version = "0.8", default-features = false, features = [
 ] }
 thiserror = "1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net"] }
+tonic = "0.12"
+prost = "0.13"
 tower = "0.5"
 tower-http = { version = "0.6", features = ["trace", "cors"] }
 tracing = "0.1"
@@ -37,6 +39,9 @@ uuid = { version = "1", features = ["v4"] }
 
 [dev-dependencies]
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+[build-dependencies]
+tonic-build = "0.12"
 
 [profile.release]
 opt-level = 3

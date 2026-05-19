@@ -41,19 +41,19 @@ pub async fn run(pool: SqlitePool, tick_secs: u64) {
     }
 }
 
-/// Run one round of the paper engine. Returns the number of trades it
-/// inserted. Exposed for tests and for any future admin "kick" endpoint.
-pub async fn tick(pool: &SqlitePool) -> Result<usize> {
-    // Find paper-mode bots across all users. The store layer is per-user
-    // because the public API requires it; here we step around that with
-    // a small raw query — paper-engine is a server-side worker.
+/// Run one round of the paper engine at a caller-supplied wall clock.
+/// Most callers want [`tick`]; this variant exists so tests can advance
+/// time deterministically (the minute-bucket seeding inside the engine
+/// makes successive calls within the same minute return the same number
+/// of trades, which is fine in production but flaky in tight test
+/// loops).
+pub async fn tick_at(pool: &SqlitePool, now: chrono::DateTime<Utc>) -> Result<usize> {
     let bot_ids: Vec<(String, String)> =
         sqlx::query_as("SELECT id, user_id FROM bot_configs WHERE status = 'paper' ORDER BY id")
             .fetch_all(pool)
             .await?;
 
     let mut total_inserted = 0usize;
-    let now = Utc::now();
     for (bot_id, user_id) in bot_ids {
         let bot = match bot_repo::get(pool, &user_id, &bot_id).await {
             Ok(b) => b,
@@ -69,6 +69,12 @@ pub async fn tick(pool: &SqlitePool) -> Result<usize> {
         tracing::info!(trades = total_inserted, "paper engine tick");
     }
     Ok(total_inserted)
+}
+
+/// Convenience wrapper: tick at the current UTC time. Production callers
+/// (the loop in [`run`]) want this.
+pub async fn tick(pool: &SqlitePool) -> Result<usize> {
+    tick_at(pool, Utc::now()).await
 }
 
 /// Simulate this minute's trades for one bot. Deterministic-ish — the
@@ -198,12 +204,16 @@ mod tests {
         .await
         .unwrap();
 
-        // Run a few ticks to defeat the 40% no-trade gate.
+        // Walk the clock minute by minute so successive ticks use
+        // different RNG seeds — otherwise we'd hit the same gate
+        // decision over and over within a single test second.
         let mut total = 0usize;
-        for _ in 0..10 {
-            total += tick(&state.db).await.unwrap();
+        let base = chrono::Utc::now();
+        for i in 0..20 {
+            let t = base + chrono::Duration::minutes(i);
+            total += tick_at(&state.db, t).await.unwrap();
         }
-        assert!(total > 0, "paper engine produced no trades across 10 ticks");
+        assert!(total > 0, "paper engine produced no trades across 20 ticks");
 
         // Trades must belong to the paper bot.
         let count: i64 =

@@ -24,6 +24,10 @@ pub struct ServiceConfig {
     pub enable_paper_engine: bool,
     /// How often (seconds) the paper engine wakes up to generate trades.
     pub paper_tick_secs: u64,
+    /// gRPC URL of the trading-server (`http://host:9001`). When set, the
+    /// bot-service opens a client connection on startup and subscribes
+    /// to market data. Disabled when empty — synthetic mode only.
+    pub trading_grpc_url: Option<String>,
 }
 
 impl ServiceConfig {
@@ -56,6 +60,9 @@ impl ServiceConfig {
             .and_then(|s| s.parse().ok())
             .filter(|n: &u64| *n > 0)
             .unwrap_or(30);
+        let trading_grpc_url = env::var("BOT_SERVICE_TRADING_GRPC_URL")
+            .ok()
+            .filter(|s| !s.trim().is_empty());
         Self {
             bind,
             database_url,
@@ -64,6 +71,7 @@ impl ServiceConfig {
             cors_origins,
             enable_paper_engine,
             paper_tick_secs,
+            trading_grpc_url,
         }
     }
 }

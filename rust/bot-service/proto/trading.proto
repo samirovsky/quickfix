@@ -1,0 +1,152 @@
+// QFTX Trading Service — gRPC contract.
+//
+// The same matching engine that powers the raw-binary TCP transport at
+// `TRADING_BIND` and the WebSocket transport at `TRADING_WS_BIND` serves
+// this gRPC API at `TRADING_GRPC_BIND`. All three transports submit the
+// same internal EngineMsg and produce byte-identical execution reports
+// for the same logical order.
+
+syntax = "proto3";
+
+package qftx.trading.v1;
+
+// -----------------------------------------------------------------------------
+// Enums — mirror src/protocol.rs
+// -----------------------------------------------------------------------------
+
+enum Side {
+  SIDE_UNSPECIFIED = 0;
+  BUY              = 1;
+  SELL             = 2;
+}
+
+enum OrdType {
+  ORD_TYPE_UNSPECIFIED = 0;
+  LIMIT                = 1;
+  MARKET               = 2;
+}
+
+enum Tif {
+  TIF_UNSPECIFIED = 0;
+  DAY             = 1;
+  IOC             = 2;
+  FOK             = 3;
+}
+
+enum ExecStatus {
+  EXEC_STATUS_UNSPECIFIED = 0;
+  NEW                     = 1;
+  PARTIALLY_FILLED        = 2;
+  FILLED                  = 3;
+  CANCELLED               = 4;
+  REJECTED                = 5;
+}
+
+// -----------------------------------------------------------------------------
+// Order messages
+// -----------------------------------------------------------------------------
+
+// Prices are fixed-point i64 with a 1e8 scale: 100.00 is encoded as
+// 10_000_000_000. Signed (`sint64`) so varint encoding is compact for
+// values near zero or negative spreads.
+message NewOrder {
+  uint64  order_id  = 1;
+  uint32  symbol_id = 2;
+  Side    side      = 3;
+  OrdType ord_type  = 4;
+  Tif     tif       = 5;
+  sint64  price     = 6;
+  uint64  qty       = 7;
+  uint64  client_id = 8;
+}
+
+message CancelOrder {
+  uint64 order_id  = 1;
+  uint32 symbol_id = 2;
+}
+
+message ExecutionReport {
+  uint64     order_id    = 1;
+  uint64     exec_id     = 2;
+  uint32     symbol_id   = 3;
+  ExecStatus status      = 4;
+  Side       side        = 5;
+  sint64     last_price  = 6;
+  uint64     last_qty    = 7;
+  uint64     leaves_qty  = 8;
+}
+
+// -----------------------------------------------------------------------------
+// Market-data messages
+// -----------------------------------------------------------------------------
+
+message TradeEvent  { uint32 symbol_id = 1; sint64 price = 2; uint64 qty = 3; uint64 ts_ns = 4; }
+message QuoteEvent  { uint32 symbol_id = 1; sint64 bid_price = 2; uint64 bid_qty = 3;
+                      sint64 ask_price = 4; uint64 ask_qty = 5; uint64 ts_ns = 6; }
+message BookSnapshotEvent { uint32 symbol_id = 1; uint64 ts_ns = 2; }
+
+message MarketDataUpdate {
+  oneof event {
+    TradeEvent        trade    = 1;
+    QuoteEvent        quote    = 2;
+    BookSnapshotEvent snapshot = 3;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// OrderSession (bidi) envelopes
+// -----------------------------------------------------------------------------
+
+message ClientMessage {
+  oneof body {
+    NewOrder    new_order = 1;
+    CancelOrder cancel    = 2;
+  }
+}
+
+message ServerMessage {
+  oneof body {
+    ExecutionReport  exec = 1;
+    MarketDataUpdate md   = 2;
+  }
+}
+
+// -----------------------------------------------------------------------------
+// Unary RPC envelopes
+// -----------------------------------------------------------------------------
+
+message PlaceOrderRequest  { NewOrder order = 1; }
+message PlaceOrderResponse {
+  // All execution reports for the order up to and including the
+  // terminal one (FILLED / PARTIALLY_FILLED-and-done / NEW resting /
+  // REJECTED). For multi-fill orders the last entry is terminal.
+  repeated ExecutionReport reports = 1;
+}
+
+message CancelOrderRequest  { CancelOrder cancel = 1; }
+message CancelOrderResponse { ExecutionReport report = 1; }
+
+message SubscribeMarketDataRequest {
+  // Empty list = subscribe to every symbol.
+  repeated uint32 symbol_ids = 1;
+}
+
+// -----------------------------------------------------------------------------
+// Service
+// -----------------------------------------------------------------------------
+
+service TradingService {
+  // Recommended for low-latency native clients. One persistent
+  // bidirectional stream carries every order and every exec report for
+  // that session. Internally this is the same path the raw-binary TCP
+  // transport uses.
+  rpc OrderSession(stream ClientMessage) returns (stream ServerMessage);
+
+  // One-off RPCs for scripts and simple clients.
+  rpc PlaceOrder  (PlaceOrderRequest)  returns (PlaceOrderResponse);
+  rpc CancelOrder (CancelOrderRequest) returns (CancelOrderResponse);
+
+  // Server-streaming market data fan-out.
+  rpc SubscribeMarketData(SubscribeMarketDataRequest)
+      returns (stream MarketDataUpdate);
+}

@@ -28,6 +28,13 @@ pub mod routes;
 pub mod seed;
 pub mod state;
 pub mod store;
+pub mod trading_client;
+
+/// Generated tonic stubs for the trading-server's `TradingService`.
+/// Mirrors the layout used by the trading-server crate itself.
+pub mod pb {
+    tonic::include_proto!("qftx.trading.v1");
+}
 
 pub use state::AppState;
 

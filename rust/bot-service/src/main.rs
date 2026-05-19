@@ -40,6 +40,11 @@ async fn main() -> anyhow::Result<()> {
             bot_service::paper_engine::run(pool, secs).await;
         });
     }
+    if let Some(url) = cfg.trading_grpc_url.clone() {
+        tokio::spawn(async move {
+            bot_service::trading_client::run(url).await;
+        });
+    }
 
     bot_service::serve(cfg.bind, state, cors).await
 }
