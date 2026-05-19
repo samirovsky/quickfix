@@ -23,6 +23,7 @@ fn row_to_config(row: sqlx::sqlite::SqliteRow) -> ApiResult<BotConfig> {
     let source: String = row.try_get("source")?;
     let created_at: DateTime<Utc> = row.try_get("created_at")?;
     let updated_at: DateTime<Utc> = row.try_get("updated_at")?;
+    let published_listing_id: Option<String> = row.try_get("published_listing_id")?;
 
     let status = BotStatus::parse(&status_raw)
         .ok_or_else(|| ApiError::Internal(anyhow::anyhow!("bad status in DB: {status_raw}")))?;
@@ -41,10 +42,24 @@ fn row_to_config(row: sqlx::sqlite::SqliteRow) -> ApiResult<BotConfig> {
         strategy,
         asset_filter,
         source,
+        published_listing_id,
         created_at,
         updated_at,
     })
 }
+
+/// SELECT for `bot_configs` joined with `marketplace_listings` so each row
+/// carries the active listing id (or NULL). Kept as a constant because the
+/// same projection is used by `get`, `list`, and the filtered variants.
+const SELECT_BOT_JOIN: &str = "
+    SELECT b.id, b.user_id, b.name, b.description, b.status,
+           b.strategy_json, b.asset_filter, b.source,
+           b.created_at, b.updated_at,
+           (SELECT l.id FROM marketplace_listings l
+            WHERE l.bot_config_id = b.id AND l.status = 'published'
+            LIMIT 1) AS published_listing_id
+    FROM bot_configs b
+";
 
 pub async fn create(
     pool: &SqlitePool,
@@ -82,10 +97,9 @@ pub async fn create(
 }
 
 pub async fn get(pool: &SqlitePool, user_id: &str, id: &str) -> ApiResult<BotConfig> {
-    let row = sqlx::query(
-        "SELECT id, user_id, name, description, status, strategy_json, asset_filter, source, created_at, updated_at
-         FROM bot_configs WHERE id = ?1 AND user_id = ?2",
-    )
+    let row = sqlx::query(&format!(
+        "{SELECT_BOT_JOIN} WHERE b.id = ?1 AND b.user_id = ?2"
+    ))
     .bind(id)
     .bind(user_id)
     .fetch_optional(pool)
@@ -94,14 +108,34 @@ pub async fn get(pool: &SqlitePool, user_id: &str, id: &str) -> ApiResult<BotCon
     row_to_config(row)
 }
 
-pub async fn list(pool: &SqlitePool, user_id: &str) -> ApiResult<Vec<BotConfig>> {
-    let rows = sqlx::query(
-        "SELECT id, user_id, name, description, status, strategy_json, asset_filter, source, created_at, updated_at
-         FROM bot_configs WHERE user_id = ?1 ORDER BY updated_at DESC",
-    )
-    .bind(user_id)
-    .fetch_all(pool)
-    .await?;
+pub async fn list(
+    pool: &SqlitePool,
+    user_id: &str,
+    status_filter: Option<BotStatus>,
+) -> ApiResult<Vec<BotConfig>> {
+    let rows = match status_filter {
+        Some(s) => {
+            sqlx::query(&format!(
+                "{SELECT_BOT_JOIN}
+                 WHERE b.user_id = ?1 AND b.status = ?2
+                 ORDER BY b.updated_at DESC"
+            ))
+            .bind(user_id)
+            .bind(s.as_str())
+            .fetch_all(pool)
+            .await?
+        }
+        None => {
+            sqlx::query(&format!(
+                "{SELECT_BOT_JOIN}
+                 WHERE b.user_id = ?1
+                 ORDER BY b.updated_at DESC"
+            ))
+            .bind(user_id)
+            .fetch_all(pool)
+            .await?
+        }
+    };
     rows.into_iter().map(row_to_config).collect()
 }
 

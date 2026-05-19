@@ -67,6 +67,16 @@ async fn publish_browse_subscribe_round_trip() {
     assert_eq!(listing["monthly_price_cents"], 1999);
     assert_eq!(listing["total_subscribers"], 0);
 
+    // GET /v1/bots/:id now reports the listing id so the UI can render a
+    // "Published" badge in the builder without a second round-trip.
+    let bot_now: Value = get_json(
+        &c,
+        &app.api_key,
+        &format!("{}/v1/bots/{bot_id}", app.base_url),
+    )
+    .await;
+    assert_eq!(bot_now["published_listing_id"], listing_id.as_str());
+
     // Bob browses.
     let listings: Vec<Value> = c
         .get(format!("{}/v1/marketplace/listings", app.base_url))

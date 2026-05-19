@@ -1,15 +1,23 @@
-use axum::extract::{Extension, Path, State};
+use axum::extract::{Extension, Path, Query, State};
 use axum::http::StatusCode;
 use axum::Json;
+use serde::Deserialize;
 
 use crate::auth::AuthUser;
 use crate::error::{ApiError, ApiResult};
 use crate::models::bot_config::{
-    BotConfig, BotConfigSummary, CreateBotRequest, CreateFromTemplateRequest, UpdateBotRequest,
-    UpdateStatusRequest,
+    BotConfig, BotConfigSummary, BotStatus, CreateBotRequest, CreateFromTemplateRequest,
+    UpdateBotRequest, UpdateStatusRequest,
 };
 use crate::state::AppState;
 use crate::store::bot_repo;
+
+#[derive(Debug, Deserialize)]
+pub struct ListQuery {
+    /// Filter by exact status: `draft|paper|live|paused|stopped`.
+    /// Omitted means "all of the caller's bots".
+    pub status: Option<String>,
+}
 
 pub async fn create(
     State(state): State<AppState>,
@@ -65,8 +73,16 @@ pub async fn create_from_template(
 pub async fn list(
     State(state): State<AppState>,
     Extension(user): Extension<AuthUser>,
+    Query(q): Query<ListQuery>,
 ) -> ApiResult<Json<Vec<BotConfigSummary>>> {
-    let configs = bot_repo::list(&state.db, &user.id).await?;
+    let filter = match q.status.as_deref() {
+        None => None,
+        Some(s) => Some(
+            BotStatus::parse(s)
+                .ok_or_else(|| ApiError::BadRequest(format!("unknown status '{s}'")))?,
+        ),
+    };
+    let configs = bot_repo::list(&state.db, &user.id, filter).await?;
     Ok(Json(configs.iter().map(BotConfigSummary::from).collect()))
 }
 

@@ -52,6 +52,11 @@ pub struct BotConfig {
     pub strategy: Strategy,
     pub asset_filter: AssetFilter,
     pub source: String,
+    /// `Some(listing_id)` if this bot is currently published in the
+    /// marketplace; `None` otherwise. Lets the UI render a "Published"
+    /// badge and decide between Publish / Unpublish actions without a
+    /// second round-trip.
+    pub published_listing_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -62,6 +67,7 @@ pub struct BotConfigSummary {
     pub name: String,
     pub status: BotStatus,
     pub source: String,
+    pub published_listing_id: Option<String>,
     pub updated_at: DateTime<Utc>,
 }
 
@@ -72,6 +78,7 @@ impl From<&BotConfig> for BotConfigSummary {
             name: c.name.clone(),
             status: c.status.clone(),
             source: c.source.clone(),
+            published_listing_id: c.published_listing_id.clone(),
             updated_at: c.updated_at,
         }
     }

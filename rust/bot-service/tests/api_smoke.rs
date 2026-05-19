@@ -93,6 +93,31 @@ async fn full_crud_lifecycle_via_template() {
         .unwrap();
     assert!(list.iter().any(|b| b["id"] == bot_id.as_str()));
 
+    // Filter by status — `paper` returns our bot; `draft` does not.
+    let papers: Vec<Value> = auth(c.get(format!("{}/v1/bots?status=paper", app.base_url)))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(papers.iter().any(|b| b["id"] == bot_id.as_str()));
+    let drafts: Vec<Value> = auth(c.get(format!("{}/v1/bots?status=draft", app.base_url)))
+        .send()
+        .await
+        .unwrap()
+        .json()
+        .await
+        .unwrap();
+    assert!(!drafts.iter().any(|b| b["id"] == bot_id.as_str()));
+
+    // Unknown status → 400.
+    let bad_status = auth(c.get(format!("{}/v1/bots?status=banana", app.base_url)))
+        .send()
+        .await
+        .unwrap();
+    assert_eq!(bad_status.status(), 400);
+
     // Delete it.
     let del = auth(c.delete(format!("{}/v1/bots/{bot_id}", app.base_url)))
         .send()
