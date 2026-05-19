@@ -28,8 +28,17 @@ export const MyBotDetailScreen: React.FC = () => {
   const { botId } = route.params as { botId: string };
 
   const { colors } = useTheme();
-  const { bot, botPerf, botLoading, loadBot, updateBot, deleteBot, publish, unpublish } =
-    useMyBots();
+  const {
+    bot,
+    botPerf,
+    botLoading,
+    loadBot,
+    updateBot,
+    deleteBot,
+    setStatus,
+    publish,
+    unpublish,
+  } = useMyBots();
 
   const [window, setWindow] = useState<7 | 30 | 90>(30);
   const [publishOpen, setPublishOpen] = useState(false);
@@ -149,6 +158,20 @@ export const MyBotDetailScreen: React.FC = () => {
           )}
         </Card>
 
+        <Card title="Paper trading">
+          <PaperToggle
+            status={bot.status}
+            onChange={async next => {
+              try {
+                await setStatus(bot.id, next);
+              } catch (e) {
+                Alert.alert('Status change failed', (e as Error).message);
+              }
+            }}
+            colors={colors}
+          />
+        </Card>
+
         <Card title="Marketplace">
           {published ? (
             <>
@@ -225,6 +248,82 @@ export const MyBotDetailScreen: React.FC = () => {
 };
 
 // ---------- subcomponents ----------
+
+const PaperToggle: React.FC<{
+  status: BotConfig['status'];
+  onChange: (next: BotConfig['status']) => Promise<void>;
+  colors: {
+    text: string;
+    textMuted: string;
+    border: string;
+    bgElevated: string;
+    primary: string;
+    primaryFg: string;
+    warn: string;
+    ok: string;
+  };
+}> = ({ status, onChange, colors }) => {
+  const isPaper = status === 'paper';
+  const isPaused = status === 'paused';
+  const [busy, setBusy] = useState(false);
+  const action = isPaper ? 'paused' : 'paper';
+  const labelMain = isPaper
+    ? 'PAUSE PAPER TRADING'
+    : isPaused
+      ? 'RESUME PAPER TRADING'
+      : 'START PAPER TRADING';
+
+  const help = isPaper
+    ? 'The paper engine generates synthetic trades for this bot every ~30 seconds. Pull-to-refresh the performance chart to see them.'
+    : isPaused
+      ? 'Trading is paused. Resume to start the engine writing trades again.'
+      : 'New bots start in draft. Promote to paper to have the engine begin writing synthetic trades — useful for testing the strategy without real capital at risk.';
+
+  return (
+    <View>
+      <View style={[styles.statusRow, { borderColor: colors.border }]}>
+        <Text style={[styles.statusLabel, { color: colors.textMuted }]}>STATUS</Text>
+        <Text
+          style={[
+            styles.statusValue,
+            {
+              color: isPaper ? colors.ok : isPaused ? colors.warn : colors.text,
+            },
+          ]}
+        >
+          {status.toUpperCase()}
+        </Text>
+      </View>
+      <Text style={[styles.help, { color: colors.textMuted, marginVertical: 8 }]}>
+        {help}
+      </Text>
+      <Pressable
+        disabled={busy}
+        onPress={async () => {
+          setBusy(true);
+          try {
+            await onChange(action);
+          } finally {
+            setBusy(false);
+          }
+        }}
+        style={({ pressed }) => [
+          styles.cta,
+          {
+            backgroundColor: isPaper ? colors.bgElevated : colors.primary,
+            borderColor: isPaper ? colors.warn : 'transparent',
+            borderWidth: isPaper ? StyleSheet.hairlineWidth : 0,
+            opacity: busy ? 0.5 : pressed ? 0.9 : 1,
+          },
+        ]}
+      >
+        <Text style={{ color: isPaper ? colors.warn : colors.primaryFg, fontWeight: '700' }}>
+          {busy ? 'UPDATING…' : labelMain}
+        </Text>
+      </Pressable>
+    </View>
+  );
+};
 
 const Stat: React.FC<{ label: string; value: string; tone: string }> = ({
   label,
@@ -583,6 +682,15 @@ const styles = StyleSheet.create({
   statValue: { fontSize: 16, fontWeight: '700', fontVariant: ['tabular-nums'], marginTop: 2 },
   label: { fontSize: 11, fontWeight: '700', letterSpacing: 0.8, marginBottom: 4 },
   help: { fontSize: 11, marginBottom: 6 },
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  statusLabel: { fontSize: 10, fontWeight: '700', letterSpacing: 0.8 },
+  statusValue: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   input: {
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 8,

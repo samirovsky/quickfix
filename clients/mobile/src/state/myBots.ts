@@ -38,6 +38,7 @@ interface MyBotsStore {
     patch: { name?: string; description?: string; strategy?: Strategy }
   ) => Promise<BotConfig | null>;
   deleteBot: (id: string) => Promise<void>;
+  setStatus: (id: string, status: BotStatus) => Promise<BotConfig | null>;
   publish: (
     id: string,
     title: string,
@@ -131,6 +132,17 @@ export const useMyBots = create<MyBotsStore>((set, get) => ({
       bots: state.bots.filter(b => b.id !== id),
       bot: state.bot?.id === id ? null : state.bot,
     }));
+  },
+
+  setStatus: async (id, status) => {
+    const c = get().client;
+    if (!c) return null;
+    const updated = await c.setBotStatus(id, status);
+    set(state => ({
+      bot: state.bot?.id === id ? updated : state.bot,
+      bots: state.bots.map(b => (b.id === id ? summary(updated) : b)),
+    }));
+    return updated;
   },
 
   publish: async (id, title, summary_, price) => {
