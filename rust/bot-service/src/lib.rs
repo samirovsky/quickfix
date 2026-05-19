@@ -24,6 +24,7 @@ pub mod db;
 pub mod error;
 pub mod models;
 pub mod paper_engine;
+pub mod price_cache;
 pub mod routes;
 pub mod seed;
 pub mod state;

@@ -21,20 +21,26 @@ use chrono::Utc;
 use sqlx::SqlitePool;
 use tokio::time::sleep;
 
-use crate::models::bot_config::BotStatus;
+use crate::models::bot_config::{BotConfig, BotStatus};
 use crate::models::strategy::PositionSizing;
+use crate::price_cache::PriceCache;
 use crate::store::{bot_repo, performance_repo};
 
+const PRICE_MAX_AGE: Duration = Duration::from_secs(120);
+
 /// Run the paper-engine loop until the process exits. Designed to be
-/// `tokio::spawn`ed from `main.rs`.
-pub async fn run(pool: SqlitePool, tick_secs: u64) {
+/// `tokio::spawn`ed from `main.rs`. The `cache` is shared with the
+/// gRPC market-data consumer; when ticks are flowing the engine uses
+/// real prices in its trade records, otherwise it falls back to the
+/// synthetic walk.
+pub async fn run(pool: SqlitePool, tick_secs: u64, cache: PriceCache) {
     let interval = Duration::from_secs(tick_secs.max(1));
     tracing::info!(
         tick_secs = interval.as_secs(),
         "paper engine started — generates synthetic trades for paper-mode bots"
     );
     loop {
-        if let Err(e) = tick(&pool).await {
+        if let Err(e) = tick(&pool, &cache).await {
             tracing::warn!(error = %e, "paper engine tick failed");
         }
         sleep(interval).await;
@@ -47,7 +53,11 @@ pub async fn run(pool: SqlitePool, tick_secs: u64) {
 /// makes successive calls within the same minute return the same number
 /// of trades, which is fine in production but flaky in tight test
 /// loops).
-pub async fn tick_at(pool: &SqlitePool, now: chrono::DateTime<Utc>) -> Result<usize> {
+pub async fn tick_at(
+    pool: &SqlitePool,
+    cache: &PriceCache,
+    now: chrono::DateTime<Utc>,
+) -> Result<usize> {
     let bot_ids: Vec<(String, String)> =
         sqlx::query_as("SELECT id, user_id FROM bot_configs WHERE status = 'paper' ORDER BY id")
             .fetch_all(pool)
@@ -62,7 +72,7 @@ pub async fn tick_at(pool: &SqlitePool, now: chrono::DateTime<Utc>) -> Result<us
         if bot.status != BotStatus::Paper {
             continue;
         }
-        let trades = tick_bot(pool, &bot_id, &bot.strategy.position_sizing, now).await?;
+        let trades = tick_bot(pool, &bot, cache, now).await?;
         total_inserted += trades;
     }
     if total_inserted > 0 {
@@ -73,22 +83,23 @@ pub async fn tick_at(pool: &SqlitePool, now: chrono::DateTime<Utc>) -> Result<us
 
 /// Convenience wrapper: tick at the current UTC time. Production callers
 /// (the loop in [`run`]) want this.
-pub async fn tick(pool: &SqlitePool) -> Result<usize> {
-    tick_at(pool, Utc::now()).await
+pub async fn tick(pool: &SqlitePool, cache: &PriceCache) -> Result<usize> {
+    tick_at(pool, cache, Utc::now()).await
 }
 
 /// Simulate this minute's trades for one bot. Deterministic-ish — the
 /// (bot_id, minute) tuple is the seed so calls within the same minute
 /// don't blow up the trade count, but successive minutes yield
-/// different outcomes.
+/// different outcomes. Real prices from the cache are preferred when
+/// fresh; otherwise we fall back to the existing synthetic 100.00 walk.
 async fn tick_bot(
     pool: &SqlitePool,
-    bot_id: &str,
-    sizing: &PositionSizing,
+    bot: &BotConfig,
+    cache: &PriceCache,
     now: chrono::DateTime<Utc>,
 ) -> Result<usize> {
     let minute_bucket = now.timestamp() / 60;
-    let mut rng = lcg_seed(bot_id, minute_bucket as u64);
+    let mut rng = lcg_seed(&bot.id, minute_bucket as u64);
 
     // 60% chance of any trades this tick.
     if next(&mut rng) % 10 < 4 {
@@ -98,9 +109,15 @@ async fn tick_bot(
     // 1–3 trades.
     let n = (next(&mut rng) % 3 + 1) as usize;
 
-    let nominal_cents = sizing_nominal_cents(sizing);
+    let nominal_cents = sizing_nominal_cents(&bot.strategy.position_sizing);
     // Centre P&L magnitude near ~2% of nominal; widen the tail.
     let centre = ((nominal_cents as i64).max(1_000) * 2) / 100;
+
+    // Take the first symbol the bot trades on as the reference for
+    // price observation. Bots that span multiple symbols still resolve
+    // to the first entry; multi-symbol bots are a later refinement.
+    let primary_symbol = bot.asset_filter.symbols.first().copied();
+    let cached = primary_symbol.and_then(|sym| cache.get(sym, PRICE_MAX_AGE));
 
     let mut inserted = 0usize;
     for i in 0..n {
@@ -111,14 +128,19 @@ async fn tick_bot(
         let pnl_cents = if win { mag } else { -(mag * 90) / 100 };
 
         let side = (next(&mut rng) % 2) as i32;
-        let price_ticks = 100 * crate::PRICE_TICKS_PER_DOLLAR + (next(&mut rng) % 10_000) as i64;
+        let price_ticks = match cached {
+            // Add a tiny jitter so multi-trade ticks don't all print
+            // the same price — keeps the bot_trades rows distinguishable.
+            Some(obs) => obs.price_ticks + (next(&mut rng) % 1_000) as i64,
+            None => 100 * crate::PRICE_TICKS_PER_DOLLAR + (next(&mut rng) % 10_000) as i64,
+        };
         let qty = 1 + (next(&mut rng) % 5) as i64;
         let order_id = minute_bucket * 1000 + i as i64;
         let ts = now - chrono::Duration::seconds(i as i64 * 7);
 
         performance_repo::record_trade(
             pool,
-            bot_id,
+            &bot.id,
             order_id,
             side,
             price_ticks,
@@ -209,9 +231,10 @@ mod tests {
         // decision over and over within a single test second.
         let mut total = 0usize;
         let base = chrono::Utc::now();
+        let cache = PriceCache::new();
         for i in 0..20 {
             let t = base + chrono::Duration::minutes(i);
-            total += tick_at(&state.db, t).await.unwrap();
+            total += tick_at(&state.db, &cache, t).await.unwrap();
         }
         assert!(total > 0, "paper engine produced no trades across 20 ticks");
 
@@ -223,5 +246,57 @@ mod tests {
                 .await
                 .unwrap();
         assert!(count > 0, "no trades attributed to paper bot");
+    }
+
+    #[tokio::test]
+    async fn cached_price_is_used_when_fresh() {
+        let state = build_state("sqlite::memory:").await.unwrap();
+        let alice = user_repo::upsert_with_key(&state.db, "alice", "k2")
+            .await
+            .unwrap();
+        let tpl = state.templates.first().unwrap().clone();
+        let bot = bot_repo::create(
+            &state.db,
+            &alice.id,
+            "with cache",
+            "",
+            &tpl.strategy,
+            &tpl.asset_filter,
+            &format!("template:{}", tpl.id),
+        )
+        .await
+        .unwrap();
+        bot_repo::set_status(&state.db, &alice.id, &bot.id, BotStatus::Paper)
+            .await
+            .unwrap();
+
+        // Inject a price for the bot's primary symbol — chosen well
+        // outside the synthetic-fallback's 100-dollar centre so we can
+        // distinguish where the engine's prices came from.
+        let symbol = bot.asset_filter.symbols[0];
+        let injected = 4242 * crate::PRICE_TICKS_PER_DOLLAR;
+        let cache = PriceCache::new();
+        cache.update(symbol, injected);
+
+        let base = chrono::Utc::now();
+        for i in 0..20 {
+            let t = base + chrono::Duration::minutes(i);
+            tick_at(&state.db, &cache, t).await.unwrap();
+        }
+        // Every recorded price should be within [injected, injected + 1000)
+        // — the jitter band added on top of cached observations.
+        let prices: Vec<i64> =
+            sqlx::query_scalar("SELECT price_ticks FROM bot_trades WHERE bot_config_id = ?1")
+                .bind(&bot.id)
+                .fetch_all(&state.db)
+                .await
+                .unwrap();
+        assert!(!prices.is_empty(), "no trades recorded across 20 ticks");
+        for p in &prices {
+            assert!(
+                (injected..injected + 1_000).contains(p),
+                "trade price {p} not from injected cache {injected}"
+            );
+        }
     }
 }

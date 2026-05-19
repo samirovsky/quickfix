@@ -33,16 +33,21 @@ async fn main() -> anyhow::Result<()> {
         tracing::info!(origins = ?cfg.cors_origins, "CORS enabled");
     }
 
+    // One shared price cache: the gRPC client writes, the paper engine reads.
+    let price_cache = bot_service::price_cache::PriceCache::new();
+
     if cfg.enable_paper_engine {
         let pool = state.db.clone();
         let secs = cfg.paper_tick_secs;
+        let cache = price_cache.clone();
         tokio::spawn(async move {
-            bot_service::paper_engine::run(pool, secs).await;
+            bot_service::paper_engine::run(pool, secs, cache).await;
         });
     }
     if let Some(url) = cfg.trading_grpc_url.clone() {
+        let cache = price_cache.clone();
         tokio::spawn(async move {
-            bot_service::trading_client::run(url).await;
+            bot_service::trading_client::run(url, cache).await;
         });
     }
 
