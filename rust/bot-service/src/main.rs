@@ -32,5 +32,14 @@ async fn main() -> anyhow::Result<()> {
     if !cfg.cors_origins.is_empty() {
         tracing::info!(origins = ?cfg.cors_origins, "CORS enabled");
     }
+
+    if cfg.enable_paper_engine {
+        let pool = state.db.clone();
+        let secs = cfg.paper_tick_secs;
+        tokio::spawn(async move {
+            bot_service::paper_engine::run(pool, secs).await;
+        });
+    }
+
     bot_service::serve(cfg.bind, state, cors).await
 }

@@ -18,6 +18,12 @@ pub struct ServiceConfig {
     /// `*` means "any origin" — convenient for demos, never use with
     /// real auth.
     pub cors_origins: Vec<String>,
+    /// When true, an in-process paper-execution engine runs in the
+    /// background and writes synthetic `bot_trades` rows for every bot
+    /// in `status = 'paper'`. Off by default — leave it off in tests.
+    pub enable_paper_engine: bool,
+    /// How often (seconds) the paper engine wakes up to generate trades.
+    pub paper_tick_secs: u64,
 }
 
 impl ServiceConfig {
@@ -42,12 +48,22 @@ impl ServiceConfig {
                     .collect()
             })
             .unwrap_or_default();
+        let enable_paper_engine = env::var("BOT_SERVICE_ENABLE_PAPER_ENGINE")
+            .map(|s| s == "1" || s.eq_ignore_ascii_case("true"))
+            .unwrap_or(false);
+        let paper_tick_secs = env::var("BOT_SERVICE_PAPER_TICK_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .filter(|n: &u64| *n > 0)
+            .unwrap_or(30);
         Self {
             bind,
             database_url,
             seed_keys_path,
             seed_demo,
             cors_origins,
+            enable_paper_engine,
+            paper_tick_secs,
         }
     }
 }

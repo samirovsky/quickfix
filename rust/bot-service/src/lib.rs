@@ -23,6 +23,7 @@ pub mod config;
 pub mod db;
 pub mod error;
 pub mod models;
+pub mod paper_engine;
 pub mod routes;
 pub mod seed;
 pub mod state;
