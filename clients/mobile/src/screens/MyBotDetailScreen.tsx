@@ -16,6 +16,7 @@ import { BotConfig, PositionSizing, Strategy } from '../bots/api';
 import { Card } from '../components/Card';
 import { PerformanceChart } from '../components/PerformanceChart';
 import { SegmentedControl } from '../components/SegmentedControl';
+import { StrategyEditor } from '../components/StrategyEditor';
 import { useMyBots } from '../state/myBots';
 import { useTheme } from '../theme/ThemeProvider';
 
@@ -96,6 +97,13 @@ export const MyBotDetailScreen: React.FC = () => {
 
         <Card title="Risk &amp; sizing">
           <RiskEditor bot={bot} onSave={updateBot} colors={colors} />
+        </Card>
+
+        <Card title="Strategy thresholds">
+          <StrategyEditor
+            strategy={bot.strategy}
+            onSave={next => updateBot(bot.id, { strategy: next })}
+          />
         </Card>
 
         <Card title="Performance">
