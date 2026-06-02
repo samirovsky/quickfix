@@ -36,6 +36,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check required secrets
+        # Fail fast with a human-readable error when the repo secrets
+        # aren't set. Without this, the Vercel CLI just says
+        # "No existing credentials found" which doesn't point at the fix.
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          missing=()
+          [ -z "$VERCEL_TOKEN" ]      && missing+=("VERCEL_TOKEN")
+          [ -z "$VERCEL_ORG_ID" ]     && missing+=("VERCEL_ORG_ID")
+          [ -z "$VERCEL_PROJECT_ID" ] && missing+=("VERCEL_PROJECT_ID")
+          if [ ${#missing[@]} -ne 0 ]; then
+            echo "::error::Missing repo secrets: ${missing[*]}"
+            echo "::error::Add them at: Settings → Secrets and variables → Actions"
+            echo "::error::Setup steps: clients/mobile/DEPLOY.md §0"
+            exit 1
+          fi
+
       - uses: actions/setup-node@v4
         with:
           node-version: '20'

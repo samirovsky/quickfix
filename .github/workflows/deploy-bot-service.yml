@@ -38,6 +38,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check required secrets
+        env:
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
+        run: |
+          if [ -z "$FLY_API_TOKEN" ]; then
+            echo "::error::Missing repo secret: FLY_API_TOKEN"
+            echo "::error::Generate one with: fly tokens create deploy -a qftx-bot-service"
+            echo "::error::Then add it at: Settings → Secrets and variables → Actions"
+            echo "::error::Setup steps: clients/mobile/DEPLOY.md §0"
+            exit 1
+          fi
+
       - uses: superfly/flyctl-actions/setup-flyctl@master
 
       - name: Deploy to Fly.io
